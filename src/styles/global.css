@@ -26,3 +26,60 @@ body {
 *::after {
   box-sizing: border-box;
 }
+
+.shader-dev-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 18px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.shader-dev-range::-webkit-slider-runnable-track {
+  height: 2px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+}
+
+.shader-dev-range::-moz-range-track {
+  height: 2px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+}
+
+.shader-dev-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: #fff;
+  margin-top: -6px;
+  border: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
+  transition: transform 0.15s ease;
+}
+
+.shader-dev-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: #fff;
+  border: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
+  transition: transform 0.15s ease;
+}
+
+.shader-dev-range:hover::-webkit-slider-thumb,
+.shader-dev-range:active::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+
+.shader-dev-range:focus-visible {
+  outline: none;
+}
+
+.shader-dev-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
+}

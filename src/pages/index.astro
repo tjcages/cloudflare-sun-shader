@@ -1,12 +1,14 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { AccentShader } from "../components/accent-shader";
+import { ShaderDevHost } from "../components/shader-dev-host";
 ---
 
 <Layout title="Cloudflare Sun Shader">
   <main class="shader-stage">
     <AccentShader client:load className="shader-fullscreen" />
   </main>
+  <ShaderDevHost client:load />
 
   <style>
     .shader-stage {

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useInView } from "../hooks/use-in-view"
 import { cn } from "../lib/utils"
 import { SHADER_PIXEL_BUDGET } from "../lib/shader-pixel-budget"
+import { registerAccentShader } from "../lib/shader-dev/store"
 import {
   ACCENT_SHADER_DEFAULTS,
   type AccentShaderConfig,
@@ -169,6 +170,14 @@ export function AccentShader({ className, bolts, mouse }: AccentShaderProps) {
     if (Object.keys(next).length === 0) return
     setShaderConfig((prev) => ({ ...prev, ...next }))
   }, [mouse])
+
+  useEffect(() => {
+    registerAccentShader({ config: shaderConfig, setConfig: setShaderConfig })
+  }, [shaderConfig])
+
+  useEffect(() => {
+    return () => registerAccentShader(null)
+  }, [])
 
   const containerRef = useRef<HTMLDivElement>(null)
   const shaderMountRef = useRef<ShaderMount | null>(null)

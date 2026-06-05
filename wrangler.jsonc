@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cloudflare-sun-shader",
+  "main": "worker/index.ts",
+  "compatibility_date": "2025-06-05",
+  "account_id": "944ca70087298faa2e84783db46162c5",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  }
+}

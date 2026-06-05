@@ -1,16 +1,11 @@
 ---
 import Layout from "../layouts/Layout.astro";
+import { AccentShader } from "../components/accent-shader";
 ---
 
 <Layout title="Cloudflare Sun Shader">
   <main class="shader-stage">
-    <div
-      data-id="canvas"
-      data-us-project="hKMQx3xwg1G1DMk0IUfA"
-      data-us-production="true"
-      class="shader-canvas"
-    >
-    </div>
+    <AccentShader client:load className="shader-fullscreen" />
   </main>
 
   <style>
@@ -19,81 +14,14 @@ import Layout from "../layouts/Layout.astro";
       inset: 0;
       width: 100vw;
       height: 100dvh;
-      background: #ff7038;
+      background: #ff5e1f;
       overflow: hidden;
+      isolation: isolate;
     }
 
-    .shader-canvas {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      min-width: 1080px;
-      min-height: 800px;
-      margin: auto;
+    :global(.shader-fullscreen) {
+      position: absolute !important;
+      inset: 0 !important;
     }
   </style>
-
-  <script is:inline>
-    (function () {
-      const CANVAS_SELECTOR = "[data-us-project]";
-      const SCRIPT_SRC =
-        "https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v1.4.30/dist/unicornStudio.umd.js";
-
-      function hasWebGL() {
-        try {
-          const canvas = document.createElement("canvas");
-          const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
-          if (!gl) return false;
-          const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
-          if (debugInfo) {
-            const renderer = String(
-              gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL),
-            ).toLowerCase();
-            if (
-              renderer.includes("swiftshader") ||
-              renderer.includes("llvmpipe") ||
-              renderer.includes("software")
-            ) {
-              console.warn("UnicornStudio disabled: software rendering");
-              return false;
-            }
-          }
-          return true;
-        } catch {
-          return false;
-        }
-      }
-
-      function init() {
-        if (window.UnicornStudio && !window.UnicornStudio.isInitialized) {
-          window.UnicornStudio.init();
-          window.UnicornStudio.isInitialized = true;
-        }
-      }
-
-      function load() {
-        if (!document.querySelector(CANVAS_SELECTOR)) return;
-        if (!hasWebGL()) return;
-        if (window.UnicornStudio && typeof window.UnicornStudio.init === "function") {
-          init();
-          return;
-        }
-        if (!window.UnicornStudio) {
-          window.UnicornStudio = { isInitialized: false };
-        }
-        const script = document.createElement("script");
-        script.async = true;
-        script.src = SCRIPT_SRC;
-        script.onload = init;
-        (document.head || document.body).appendChild(script);
-      }
-
-      if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", load, { once: true });
-      } else {
-        load();
-      }
-    })();
-  </script>
 </Layout>

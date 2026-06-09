@@ -1,0 +1,78 @@
+---
+type Current = "sun" | "sun-v2" | "waterfall" | "wave" | "combo";
+interface Props {
+  current: Current;
+}
+const { current } = Astro.props;
+
+const links: { id: Current; label: string; href: string }[] = [
+  { id: "sun", label: "Sun", href: "/" },
+  { id: "sun-v2", label: "Sun v2", href: "/sun-v2" },
+  { id: "waterfall", label: "Waterfall", href: "/waterfall" },
+  { id: "wave", label: "Wave", href: "/wave" },
+  { id: "combo", label: "Combo", href: "/combo" },
+];
+---
+
+<nav class="shader-nav" aria-label="Shader pages">
+  {
+    links.map((link) => (
+      <a
+        href={link.href}
+        class:list={["shader-nav-link", { "is-active": link.id === current }]}
+        aria-current={link.id === current ? "page" : undefined}
+      >
+        {link.label}
+      </a>
+    ))
+  }
+</nav>
+
+<style>
+  .shader-nav {
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    z-index: 70;
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(0, 0, 0, 0.32);
+    color: #fff;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.45);
+    font-family:
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      Roboto,
+      sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+  }
+
+  .shader-nav-link {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 14px;
+    border-radius: 999px;
+    color: rgba(255, 255, 255, 0.7);
+    text-decoration: none;
+    transition:
+      color 160ms ease,
+      background-color 160ms ease;
+  }
+
+  .shader-nav-link:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .shader-nav-link.is-active {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.16);
+  }
+</style>

@@ -1,7 +1,7 @@
 import type { ShaderDevFieldDef } from "shader-panel"
-import type { AccentShaderConfig } from "./accent-shader-config"
+import type { AccentShaderV2Config } from "./accent-shader-v2-config"
 
-export const ACCENT_SHADER_DEV_FIELDS: ShaderDevFieldDef<AccentShaderConfig>[] =
+export const ACCENT_SHADER_V2_DEV_FIELDS: ShaderDevFieldDef<AccentShaderV2Config>[] =
   [
     { type: "section", title: "Animation" },
     {
@@ -22,6 +22,63 @@ export const ACCENT_SHADER_DEV_FIELDS: ShaderDevFieldDef<AccentShaderConfig>[] =
     },
     { type: "section", title: "Background" },
     { type: "color", key: "bgColor", label: "Background" },
+    { type: "section", title: "Depth / Wave" },
+    {
+      type: "slider",
+      key: "waveAmp",
+      label: "Wave amplitude",
+      min: 0,
+      max: 4,
+      step: 0.02,
+    },
+    {
+      type: "slider",
+      key: "waveScale",
+      label: "Wave scale",
+      min: 0.1,
+      max: 10,
+      step: 0.05,
+    },
+    {
+      type: "slider",
+      key: "waveSpeed",
+      label: "Wave speed",
+      min: 0,
+      max: 4,
+      step: 0.02,
+    },
+    {
+      type: "slider",
+      key: "waveTurb",
+      label: "Wave turbulence",
+      min: 0,
+      max: 3,
+      step: 0.01,
+    },
+    {
+      type: "slider",
+      key: "depthParallax",
+      label: "Depth parallax (px)",
+      min: 0,
+      max: 100,
+      step: 0.5,
+    },
+    {
+      type: "slider",
+      key: "depthSize",
+      label: "Depth size influence",
+      min: 0,
+      max: 2.5,
+      step: 0.02,
+    },
+    {
+      type: "slider",
+      key: "depthBright",
+      label: "Depth brightness influence",
+      min: 0,
+      max: 2.5,
+      step: 0.02,
+    },
     { type: "section", title: "Wisps" },
     {
       type: "slider",

@@ -7,12 +7,12 @@ import { cn } from "../lib/utils"
 import { SHADER_PIXEL_BUDGET } from "../lib/shader-pixel-budget"
 import { registerShaderDev } from "shader-panel"
 import {
-  ACCENT_SHADER_DEFAULTS,
-  type AccentShaderConfig,
+  ACCENT_SHADER_V3_DEFAULTS,
+  type AccentShaderV3Config,
   configToShaderUniforms,
-} from "./accent-shader-config"
-import { ACCENT_SHADER_DEV_FIELDS } from "./accent-shader-fields"
-import { ACCENT_SHADER_FRAGMENT } from "./accent-shader-fragment"
+} from "./accent-shader-v3-config"
+import { ACCENT_SHADER_V3_DEV_FIELDS } from "./accent-shader-v3-fields"
+import { ACCENT_SHADER_V3_FRAGMENT } from "./accent-shader-v3-fragment"
 
 const MOUSE_OFF_SCREEN: [number, number] = [-9999, -9999]
 
@@ -37,14 +37,14 @@ const QUALITY_TIERS: QualityTier[] = [
     minPixelRatio: 1.15,
     boltCountCap: 8,
     shimmerAmpCap: 0.72,
-    bloomFarAmpCap: 0.25,
+    bloomFarAmpCap: 0.28,
   },
   {
     maxPixelCount: SHADER_PIXEL_BUDGET.maxPixelCount,
     minPixelRatio: SHADER_PIXEL_BUDGET.minPixelRatio,
     boltCountCap: 10,
-    shimmerAmpCap: 0.83,
-    bloomFarAmpCap: 0.3,
+    shimmerAmpCap: 0.85,
+    bloomFarAmpCap: 0.4,
   },
 ]
 
@@ -69,62 +69,8 @@ function supportsWebGL2(): boolean {
   }
 }
 
-export type AccentShaderBoltProps = {
-  /** 0 = center/random columns, 1 = left/right flanks only */
-  edgeBias?: number
-  /** Center band to avoid as a fraction of grid width (0–0.45) */
-  centerExclusion?: number
-  /** Path spread jitter around the anchor column */
-  spread?: number
-  fromCenterMin?: number
-  fromCenterMax?: number
-}
-
-export type AccentShaderMouseProps = {
-  /** Scales wisp reveal (size, visibility, bloom, brightness) near the cursor */
-  revealAmp?: number
-  /** Pixels of movement needed to reach full reveal strength */
-  motionSensitivity?: number
-  /** How long the reveal lingers after the cursor stops (ms) */
-  fadeMs?: number
-}
-
-interface AccentShaderProps {
+interface AccentShaderV3Props {
   className?: string
-  bolts?: AccentShaderBoltProps
-  mouse?: AccentShaderMouseProps
-}
-
-function boltPropsToConfig(
-  bolts: AccentShaderBoltProps | undefined,
-): Partial<AccentShaderConfig> {
-  if (!bolts) return {}
-  return {
-    ...(bolts.edgeBias !== undefined && { boltEdgeBias: bolts.edgeBias }),
-    ...(bolts.centerExclusion !== undefined && {
-      boltCenterExclusion: bolts.centerExclusion,
-    }),
-    ...(bolts.spread !== undefined && { boltSpread: bolts.spread }),
-    ...(bolts.fromCenterMin !== undefined && {
-      boltFromCenterMin: bolts.fromCenterMin,
-    }),
-    ...(bolts.fromCenterMax !== undefined && {
-      boltFromCenterMax: bolts.fromCenterMax,
-    }),
-  }
-}
-
-function mousePropsToConfig(
-  mouse: AccentShaderMouseProps | undefined,
-): Partial<AccentShaderConfig> {
-  if (!mouse) return {}
-  return {
-    ...(mouse.revealAmp !== undefined && { mouseRevealAmp: mouse.revealAmp }),
-    ...(mouse.motionSensitivity !== undefined && {
-      mouseMotionSensitivity: mouse.motionSensitivity,
-    }),
-    ...(mouse.fadeMs !== undefined && { mouseRevealFadeMs: mouse.fadeMs }),
-  }
 }
 
 function initialQualityTierIndex(): number {
@@ -139,9 +85,9 @@ function initialQualityTierIndex(): number {
 }
 
 function applyQualityCaps(
-  config: AccentShaderConfig,
+  config: AccentShaderV3Config,
   tier: QualityTier,
-): AccentShaderConfig {
+): AccentShaderV3Config {
   return {
     ...config,
     boltCount: Math.min(config.boltCount, tier.boltCountCap),
@@ -150,35 +96,21 @@ function applyQualityCaps(
   }
 }
 
-export function AccentShader({ className, bolts, mouse }: AccentShaderProps) {
+export function AccentShaderV3({ className }: AccentShaderV3Props) {
   const [state, setState] = useState<"loading" | "active" | "fallback">(
     "loading",
   )
-  const [shaderConfig, setShaderConfig] = useState<AccentShaderConfig>(() => ({
-    ...ACCENT_SHADER_DEFAULTS,
-    ...boltPropsToConfig(bolts),
-    ...mousePropsToConfig(mouse),
+  const [shaderConfig, setShaderConfig] = useState<AccentShaderV3Config>(() => ({
+    ...ACCENT_SHADER_V3_DEFAULTS,
   }))
 
   useEffect(() => {
-    const next = boltPropsToConfig(bolts)
-    if (Object.keys(next).length === 0) return
-    setShaderConfig((prev) => ({ ...prev, ...next }))
-  }, [bolts])
-
-  useEffect(() => {
-    const next = mousePropsToConfig(mouse)
-    if (Object.keys(next).length === 0) return
-    setShaderConfig((prev) => ({ ...prev, ...next }))
-  }, [mouse])
-
-  useEffect(() => {
     return registerShaderDev({
-      id: "accent",
-      title: "Accent shader",
+      id: "accent-v3",
+      title: "Waterfall shader",
       values: shaderConfig,
-      defaults: { ...ACCENT_SHADER_DEFAULTS },
-      fields: ACCENT_SHADER_DEV_FIELDS,
+      defaults: { ...ACCENT_SHADER_V3_DEFAULTS },
+      fields: ACCENT_SHADER_V3_DEV_FIELDS,
       onChange: setShaderConfig,
     })
   }, [shaderConfig])
@@ -278,7 +210,7 @@ export function AccentShader({ className, bolts, mouse }: AccentShaderProps) {
 
     const mount = new ShaderMount(
       host,
-      ACCENT_SHADER_FRAGMENT,
+      ACCENT_SHADER_V3_FRAGMENT,
       {
         ...configToShaderUniforms(shaderConfigRef.current),
         u_mouse: MOUSE_OFF_SCREEN,
@@ -344,7 +276,7 @@ export function AccentShader({ className, bolts, mouse }: AccentShaderProps) {
           samples.reduce((sum, value) => sum + value, 0) / samples.length
         const coolingDown = now - qualityLastTierChangeAtRef.current < 2000
         if (!coolingDown) {
-          if (avg > 21) {
+          if (avg > 22) {
             setTier(qualityTierIndexRef.current - 1)
           } else if (avg < 15) {
             setTier(qualityTierIndexRef.current + 1)
@@ -558,40 +490,7 @@ export function AccentShader({ className, bolts, mouse }: AccentShaderProps) {
             backgroundImage:
               "radial-gradient(ellipse 46% 36% at 50% 108%, rgba(255,253,238,0.84) 0%, rgba(255,242,176,0.58) 24%, rgba(255,200,102,0.3) 52%, transparent 78%), radial-gradient(ellipse 72% 62% at 50% 55%, rgba(255,225,142,0.08) 0%, transparent 64%)",
           }}
-        >
-          <div
-            className="absolute inset-0 opacity-55"
-            style={{
-              backgroundImage:
-                "radial-gradient(circle, rgba(255,251,245,0.48) 0 0.7px, transparent 0.9px)",
-              backgroundSize: "7px 7px",
-              WebkitMaskImage:
-                "radial-gradient(ellipse 72% 74% at 50% 54%, #000 0%, transparent 84%)",
-              maskImage:
-                "radial-gradient(ellipse 72% 74% at 50% 54%, #000 0%, transparent 84%)",
-            }}
-          />
-          <div
-            className="absolute inset-0 opacity-20"
-            style={{
-              backgroundImage:
-                "radial-gradient(circle, rgba(255,251,245,0.55) 0 0.8px, transparent 1px)",
-              backgroundPosition: "3px 4px",
-              backgroundSize: "13px 13px",
-              WebkitMaskImage:
-                "radial-gradient(ellipse 55% 50% at 50% 68%, #000 0%, transparent 78%)",
-              maskImage:
-                "radial-gradient(ellipse 55% 50% at 50% 68%, #000 0%, transparent 78%)",
-            }}
-          />
-          <div
-            className="absolute left-1/2 bottom-[-24%] h-[46%] w-[58%] -translate-x-1/2 blur-xl"
-            style={{
-              background:
-                "radial-gradient(ellipse at center, rgba(255,253,238,0.74) 0%, rgba(255,241,174,0.5) 32%, rgba(255,199,100,0.28) 60%, transparent 82%)",
-            }}
-          />
-        </div>
+        />
       )}
     </div>
   )

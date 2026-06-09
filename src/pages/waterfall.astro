@@ -1,14 +1,14 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import Nav from "../components/Nav.astro";
-import { AccentShader } from "../components/accent-shader";
+import { AccentShaderV3 } from "../components/accent-shader-v3";
 import { ShaderDevRoot } from "shader-panel";
 ---
 
-<Layout title="Cloudflare Sun Shader">
-  <Nav current="sun" />
+<Layout title="Waterfall Shader">
+  <Nav current="waterfall" />
   <main class="shader-stage">
-    <AccentShader client:load className="shader-fullscreen" />
+    <AccentShaderV3 client:load className="shader-fullscreen" />
   </main>
   <ShaderDevRoot client:load defaultTheme="light" />
 

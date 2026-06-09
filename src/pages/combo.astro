@@ -1,19 +1,19 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import Nav from "../components/Nav.astro";
-import { AccentShader } from "../components/accent-shader";
+import { ComboShader } from "../components/combo-shader";
 import { ShaderDevRoot } from "shader-panel";
 ---
 
-<Layout title="Cloudflare Sun Shader">
-  <Nav current="sun" />
-  <main class="shader-stage">
-    <AccentShader client:load className="shader-fullscreen" />
+<Layout title="Combo Shader">
+  <Nav current="combo" />
+  <main class="combo-stage">
+    <ComboShader client:only="react" className="shader-fullscreen" />
   </main>
   <ShaderDevRoot client:load defaultTheme="light" />
 
   <style>
-    .shader-stage {
+    .combo-stage {
       position: fixed;
       inset: 0;
       width: 100vw;

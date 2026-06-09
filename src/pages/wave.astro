@@ -1,24 +1,23 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import Nav from "../components/Nav.astro";
-import { AccentShader } from "../components/accent-shader";
-import { ShaderDevRoot } from "shader-panel";
+import { WaveShader } from "../components/wave-shader";
 ---
 
-<Layout title="Cloudflare Sun Shader">
-  <Nav current="sun" />
-  <main class="shader-stage">
-    <AccentShader client:load className="shader-fullscreen" />
+<Layout title="Wave Shader">
+  <Nav current="wave" />
+  <main class="wave-stage">
+    <WaveShader client:only="react" className="shader-fullscreen" />
   </main>
-  <ShaderDevRoot client:load defaultTheme="light" />
+  {/* No <ShaderDevRoot/> — useShaderDev injects the panel itself. */}
 
   <style>
-    .shader-stage {
+    .wave-stage {
       position: fixed;
       inset: 0;
       width: 100vw;
       height: 100dvh;
-      background: #ff5e1f;
+      background: #0b0b14;
       overflow: hidden;
       isolation: isolate;
     }

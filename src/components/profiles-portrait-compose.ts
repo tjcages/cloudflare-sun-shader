@@ -13,22 +13,7 @@ import {
   PORTRAIT_OUTPUT_HEIGHT,
   PORTRAIT_OUTPUT_WIDTH,
 } from "./profiles-portrait-types"
-
-function parseHexColor(hex: string): [number, number, number] {
-  const h = hex.replace("#", "")
-  const full =
-    h.length === 3
-      ? h
-          .split("")
-          .map((c) => c + c)
-          .join("")
-      : h
-  return [
-    parseInt(full.slice(0, 2), 16),
-    parseInt(full.slice(2, 4), 16),
-    parseInt(full.slice(4, 6), 16),
-  ]
-}
+import { parseHexColor } from "./profiles-portrait-background"
 
 function imageDataToCanvas(imageData: ImageData): HTMLCanvasElement {
   const canvas = document.createElement("canvas")

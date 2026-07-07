@@ -1,6 +1,6 @@
-/** Standard portrait output dimensions (3:4 head-and-shoulders). */
-export const PORTRAIT_OUTPUT_WIDTH = 1024
-export const PORTRAIT_OUTPUT_HEIGHT = 1365
+/** Standard portrait output dimensions (3:4). Height is a multiple of 16 for FLUX. */
+export const PORTRAIT_OUTPUT_WIDTH = 896
+export const PORTRAIT_OUTPUT_HEIGHT = 1200
 
 export type PortraitStylePresetId =
   | "studio"
@@ -49,7 +49,7 @@ export const PORTRAIT_COMPOSITIONS: Record<
     id: "close",
     label: "Close profile",
     description:
-      "Regenerate as a tight avatar-style portrait — close crop, direct eye contact.",
+      "Professional headshot cropped at the shoulders — directory / avatar style.",
   },
 }
 
@@ -103,11 +103,11 @@ export const PORTRAIT_STYLE_PRESETS: Record<
   },
   cloudflare: {
     removeBackground: true,
-    backgroundColor: "#f4f4f5",
-    exposure: 1.06,
-    contrast: 1.1,
-    warmth: 0.05,
-    saturation: 1.0,
+    backgroundColor: "#ff5e1f",
+    exposure: 1.02,
+    contrast: 1.03,
+    warmth: 0.02,
+    saturation: 0.98,
   },
   natural: {
     removeBackground: false,
@@ -122,7 +122,7 @@ export const PORTRAIT_STYLE_PRESETS: Record<
 export const PORTRAIT_STYLE_DEFAULTS: PortraitStyleSettings = {
   preset: "cloudflare",
   composition: "headshot",
-  autoProcess: true,
+  autoProcess: false,
   subjectScale: 1.0,
   anchorYOffset: 0,
   ...PORTRAIT_STYLE_PRESETS.cloudflare,

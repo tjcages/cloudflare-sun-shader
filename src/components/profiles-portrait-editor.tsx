@@ -7,6 +7,7 @@ import {
   processPortrait,
   regradePortrait,
 } from "./profiles-portrait-process"
+import { PORTRAIT_BACKGROUND_PRESETS } from "./profiles-portrait-background"
 import {
   PORTRAIT_COMPOSITIONS,
   PORTRAIT_STYLE_PRESETS,
@@ -49,6 +50,75 @@ function gradeOnlyFields(settings: PortraitStyleSettings) {
     backgroundColor: settings.backgroundColor,
     removeBackground: settings.removeBackground,
   }
+}
+
+function PortraitErrorBadge({ message }: { message: string }) {
+  const [open, setOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const show = useCallback(() => {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current)
+      hideTimerRef.current = null
+    }
+    setOpen(true)
+  }, [])
+
+  const scheduleHide = useCallback(() => {
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+    hideTimerRef.current = setTimeout(() => {
+      setOpen(false)
+      setCopied(false)
+    }, 180)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+    }
+  }, [])
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(message)
+      setCopied(true)
+      show()
+    } catch {
+      setCopied(false)
+    }
+  }, [message, show])
+
+  return (
+    <div
+      className={cn(
+        "portrait-editor-error-badge",
+        open && "is-open",
+      )}
+      onMouseEnter={show}
+      onMouseLeave={scheduleHide}
+    >
+      <span className="portrait-editor-error-dot" aria-hidden="true" />
+      <span>Error</span>
+      <div
+        className="portrait-editor-error-tooltip"
+        role="tooltip"
+        onMouseEnter={show}
+        onMouseLeave={scheduleHide}
+      >
+        <p className="portrait-editor-error-message">{message}</p>
+        <button
+          type="button"
+          className="portrait-editor-error-copy"
+          onClick={() => {
+            void handleCopy()
+          }}
+        >
+          {copied ? "Copied" : "Copy error"}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 function SliderRow({
@@ -109,7 +179,7 @@ export function PortraitEditor({
   const aiBaseUrlRef = useRef<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const runIdRef = useRef(0)
-  const initialDoneRef = useRef(false)
+  const aiGeneratedRef = useRef(false)
   const settingsSnapshotRef = useRef("")
   const compositionSnapshotRef = useRef<PortraitCompositionId>(
     initialSettings.composition,
@@ -129,6 +199,13 @@ export function PortraitEditor({
     }
   }, [])
 
+  const transferPreviewUrl = useCallback((): string | null => {
+    const url = previewUrlRef.current
+    previewUrlRef.current = null
+    aiBaseUrlRef.current = null
+    return url
+  }, [])
+
   const applyComposition = useCallback((composition: PortraitCompositionId) => {
     setSettings((prev) => ({ ...prev, composition }))
   }, [])
@@ -142,66 +219,70 @@ export function PortraitEditor({
     }))
   }, [])
 
-  // Initial face analysis + AI recomposition on open.
+  // Reset when the dialog opens — show the original immediately, no auto AI.
   useEffect(() => {
     if (!open) return
 
     setSettings(initialSettings)
     setPreviewUrl(null)
     setFaceAnalysis(null)
-    initialDoneRef.current = false
+    setError(null)
+    setStatus(null)
+    setProcessing(false)
+    aiGeneratedRef.current = false
     revokePreview()
     revokeAiBase()
+    settingsSnapshotRef.current = JSON.stringify(initialSettings)
+    compositionSnapshotRef.current = initialSettings.composition
+  }, [open, sourceUrl, initialSettings, revokePreview, revokeAiBase])
 
-    const runId = ++runIdRef.current
-    let cancelled = false
+  const runAiGeneration = useCallback(
+    async (nextSettings: PortraitStyleSettings) => {
+      const runId = ++runIdRef.current
+      let cancelled = false
 
-    ;(async () => {
       setProcessing(true)
       setError(null)
-      setStatus("Analyzing portrait…")
+      setStatus("Preparing face reference…")
+
       try {
-        const analysis = await analyzePortraitFace(sourceUrl, setStatus)
+        const analysis =
+          faceAnalysis ??
+          (await analyzePortraitFace(sourceUrl, setStatus))
         if (cancelled || runId !== runIdRef.current) return
         setFaceAnalysis(analysis)
 
         const result = await processPortrait(
           sourceUrl,
-          initialSettings,
+          nextSettings,
           setStatus,
           analysis,
         )
         if (cancelled || runId !== runIdRef.current) return
+
+        revokeAiBase()
         revokePreview()
         previewUrlRef.current = result.url
         aiBaseUrlRef.current = result.aiUrl
         setPreviewUrl(result.url)
-        setFaceAnalysis(result.faceAnalysis)
+        aiGeneratedRef.current = true
+        compositionSnapshotRef.current = nextSettings.composition
+        settingsSnapshotRef.current = JSON.stringify(nextSettings)
         setStatus(null)
-        initialDoneRef.current = true
-        compositionSnapshotRef.current = initialSettings.composition
-        settingsSnapshotRef.current = JSON.stringify(initialSettings)
       } catch (err) {
         if (cancelled || runId !== runIdRef.current) return
         setStatus(null)
-        setError(
-          err instanceof Error ? err.message : String(err),
-        )
+        setError(err instanceof Error ? err.message : String(err))
       } finally {
         if (!cancelled && runId === runIdRef.current) setProcessing(false)
       }
-    })()
+    },
+    [faceAnalysis, revokeAiBase, revokePreview, sourceUrl],
+  )
 
-    return () => {
-      cancelled = true
-    }
-    // initialSettings is snapshotted by the parent when the editor opens —
-    // only re-run when the dialog opens or the source image changes.
-  }, [open, sourceUrl, initialSettings, revokePreview, revokeAiBase])
-
-  // Debounced re-process when the user tweaks settings (after initial load).
+  // Re-run AI or regrade when the user tweaks settings after a generation.
   useEffect(() => {
-    if (!open || !faceAnalysis || !initialDoneRef.current) return
+    if (!open || !aiGeneratedRef.current || !faceAnalysis) return
 
     const settingsJson = JSON.stringify(settings)
     if (settingsJson === settingsSnapshotRef.current) return
@@ -227,7 +308,7 @@ export function PortraitEditor({
         setError(null)
         setStatus(
           compositionChanged
-            ? "AI recomposition — generating new photograph…"
+            ? "AI edit — preserving face details…"
             : "Updating color grade…",
         )
         try {
@@ -260,9 +341,7 @@ export function PortraitEditor({
         } catch (err) {
           if (cancelled || runId !== runIdRef.current) return
           setStatus(null)
-          setError(
-            err instanceof Error ? err.message : String(err),
-          )
+          setError(err instanceof Error ? err.message : String(err))
         } finally {
           if (!cancelled && runId === runIdRef.current) setProcessing(false)
         }
@@ -307,12 +386,11 @@ export function PortraitEditor({
         <header className="portrait-editor-header">
           <div>
             <h2 id="portrait-editor-title" className="portrait-editor-title">
-              Portrait editor
+              AI portrait studio
             </h2>
             <p className="portrait-editor-subtitle">
-              AI re-photographs each upload in a consistent scenario — new
-              composition, lighting, and background. Likeness is preserved via
-              Workers AI (FLUX).
+              Optional — edit your photo into a new scenario while preserving
+              facial identity. Uses FLUX.2 klein 9B (fast, ~10–30s).
             </p>
           </div>
           <button
@@ -321,7 +399,20 @@ export function PortraitEditor({
             onClick={onClose}
             aria-label="Close portrait editor"
           >
-            ×
+            <svg
+              aria-hidden="true"
+              className="portrait-editor-close-icon"
+              viewBox="0 0 14 14"
+              width="14"
+              height="14"
+            >
+              <path
+                d="M2 2 12 12M12 2 2 12"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
           </button>
         </header>
 
@@ -341,7 +432,7 @@ export function PortraitEditor({
                   {mode === "split"
                     ? "Before / After"
                     : mode === "processed"
-                      ? "Generated"
+                      ? "AI result"
                       : "Original"}
                 </button>
               ))}
@@ -367,7 +458,7 @@ export function PortraitEditor({
               {compareMode !== "original" ? (
                 <div className="portrait-editor-pane">
                   <span className="portrait-editor-pane-label">
-                    {processing ? "Generating…" : "AI portrait"}
+                    {processing ? "Generating…" : previewUrl ? "AI result" : "Not generated"}
                   </span>
                   {previewUrl ? (
                     <img
@@ -380,7 +471,7 @@ export function PortraitEditor({
                     <div className="portrait-editor-placeholder">
                       {processing
                         ? (status ?? "Generating portrait…")
-                        : (status ?? "Preparing…")}
+                        : "Click “Generate AI portrait” to create a new scenario."}
                     </div>
                   )}
                 </div>
@@ -397,6 +488,19 @@ export function PortraitEditor({
           </div>
 
           <aside className="portrait-editor-controls">
+            <div className="portrait-editor-section">
+              <button
+                type="button"
+                className="portrait-editor-btn portrait-editor-btn-primary portrait-editor-generate"
+                disabled={processing}
+                onClick={() => {
+                  void runAiGeneration(settings)
+                }}
+              >
+                {processing ? "Generating…" : "Generate AI portrait"}
+              </button>
+            </div>
+
             <div className="portrait-editor-section">
               <span className="portrait-editor-section-title">Scenario</span>
               <p className="portrait-editor-section-hint">
@@ -422,6 +526,67 @@ export function PortraitEditor({
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="portrait-editor-section">
+              <span className="portrait-editor-section-title">Background</span>
+              <p className="portrait-editor-section-hint">
+                Replaces the backdrop behind the subject after AI generation.
+              </p>
+              <div className="portrait-editor-bg-swatches">
+                {PORTRAIT_BACKGROUND_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    className={cn(
+                      "portrait-editor-bg-swatch",
+                      settings.backgroundColor.toLowerCase() ===
+                        preset.color.toLowerCase() && "is-active",
+                    )}
+                    onClick={() =>
+                      setSettings((s) => ({
+                        ...s,
+                        backgroundColor: preset.color,
+                        removeBackground: true,
+                      }))
+                    }
+                  >
+                    <span
+                      className="portrait-editor-bg-swatch-chip"
+                      style={{ background: preset.color }}
+                      aria-hidden="true"
+                    />
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+              <label className="portrait-editor-color">
+                <span>Custom color</span>
+                <input
+                  type="color"
+                  value={settings.backgroundColor}
+                  onChange={(e) =>
+                    setSettings((s) => ({
+                      ...s,
+                      backgroundColor: e.target.value,
+                      removeBackground: true,
+                    }))
+                  }
+                />
+              </label>
+              <label className="portrait-editor-toggle">
+                <input
+                  type="checkbox"
+                  checked={settings.removeBackground}
+                  onChange={(e) =>
+                    setSettings((s) => ({
+                      ...s,
+                      removeBackground: e.target.checked,
+                    }))
+                  }
+                />
+                Replace background with solid color
+              </label>
             </div>
 
             <div className="portrait-editor-section">
@@ -485,13 +650,7 @@ export function PortraitEditor({
 
         <footer className="portrait-editor-footer">
           {error ? (
-            <div className="portrait-editor-error-badge">
-              <span className="portrait-editor-error-dot" aria-hidden="true" />
-              <span>Error</span>
-              <div className="portrait-editor-error-tooltip" role="tooltip">
-                {error}
-              </div>
-            </div>
+            <PortraitErrorBadge message={error} />
           ) : status ? (
             <div className="portrait-editor-status" role="status">
               <span className="profiles-status-dot" />
@@ -499,18 +658,18 @@ export function PortraitEditor({
             </div>
           ) : (
             <span className="portrait-editor-footer-hint">
-              Requires Workers AI — run `pnpm build && pnpm preview`
+              Use your original photo, or generate then apply an AI portrait.
             </span>
           )}
           <div className="portrait-editor-actions">
             {onSkip ? (
               <button
                 type="button"
-                className="portrait-editor-btn"
+                className="portrait-editor-btn portrait-editor-btn-primary"
                 disabled={processing}
                 onClick={() => onSkip(sourceUrl)}
               >
-                Use original
+                Use original photo
               </button>
             ) : null}
             <button
@@ -522,13 +681,14 @@ export function PortraitEditor({
             </button>
             <button
               type="button"
-              className="portrait-editor-btn portrait-editor-btn-primary"
+              className="portrait-editor-btn"
               disabled={processing || !previewUrl}
               onClick={() => {
-                if (previewUrl) onApply(previewUrl, settings)
+                const url = transferPreviewUrl()
+                if (url) onApply(url, settings)
               }}
             >
-              Apply portrait
+              Apply AI portrait
             </button>
           </div>
         </footer>

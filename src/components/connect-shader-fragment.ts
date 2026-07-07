@@ -423,6 +423,9 @@ export const CONNECT_EMITTER_FRAGMENT = /* glsl */ `
     float mask = (1.0 - smoothstep(0.78, 0.92, abs(along)))
       * (1.0 - smoothstep(wHalf * 0.7, wHalf, abs(across)));
     float alpha = mask * vAlpha * uEmitAlpha;
-    fragColor = vec4(vColor * alpha, alpha);
+    if (alpha < 0.004) discard;
+    // Straight alpha — matches the base/hatch passes and Three.js NormalBlending.
+    // Premultiplied rgb here reads as a dark halo at every soft edge.
+    fragColor = vec4(vColor, alpha);
   }
 `

@@ -110,7 +110,7 @@ import { ProfilesShader } from "../components/profiles-shader";
     :global(.portrait-editor) {
       display: flex;
       flex-direction: column;
-      width: min(1100px, 100%);
+      width: min(1400px, calc(100vw - 48px));
       max-height: calc(100dvh - 48px);
       border-radius: 16px;
       border: 1px solid rgba(255, 255, 255, 0.14);
@@ -152,15 +152,20 @@ import { ProfilesShader } from "../components/profiles-shader";
 
     :global(.portrait-editor-close) {
       flex-shrink: 0;
+      display: grid;
+      place-items: center;
       width: 32px;
       height: 32px;
+      padding: 0;
       border: 1px solid rgba(255, 255, 255, 0.14);
       border-radius: 8px;
       background: rgba(255, 255, 255, 0.05);
       color: rgba(255, 255, 255, 0.8);
-      font-size: 20px;
-      line-height: 1;
       cursor: pointer;
+    }
+
+    :global(.portrait-editor-close-icon) {
+      display: block;
     }
 
     :global(.portrait-editor-close:hover) {
@@ -170,14 +175,14 @@ import { ProfilesShader } from "../components/profiles-shader";
 
     :global(.portrait-editor-body) {
       display: grid;
-      grid-template-columns: 1fr 280px;
+      grid-template-columns: 1fr 320px;
       gap: 0;
       min-height: 0;
       flex: 1;
       overflow: hidden;
     }
 
-    @media (max-width: 860px) {
+    @media (max-width: 960px) {
       :global(.portrait-editor-body) {
         grid-template-columns: 1fr;
         overflow-y: auto;
@@ -299,6 +304,10 @@ import { ProfilesShader } from "../components/profiles-shader";
       color: rgba(255, 255, 255, 0.45);
     }
 
+    :global(.portrait-editor-generate) {
+      width: 100%;
+    }
+
     :global(.portrait-editor-section-hint) {
       margin: -4px 0 0;
       font-size: 11px;
@@ -310,6 +319,42 @@ import { ProfilesShader } from "../components/profiles-shader";
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
+    }
+
+    :global(.portrait-editor-bg-swatches) {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    :global(.portrait-editor-bg-swatch) {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.04);
+      color: rgba(255, 255, 255, 0.78);
+      font-size: 12px;
+      cursor: pointer;
+      transition:
+        border-color 140ms ease,
+        background-color 140ms ease;
+    }
+
+    :global(.portrait-editor-bg-swatch.is-active) {
+      border-color: rgba(255, 94, 31, 0.55);
+      background: rgba(255, 94, 31, 0.12);
+    }
+
+    :global(.portrait-editor-bg-swatch-chip) {
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      flex-shrink: 0;
     }
 
     :global(.portrait-editor-preset) {
@@ -451,6 +496,10 @@ import { ProfilesShader } from "../components/profiles-shader";
       flex-shrink: 0;
     }
 
+    :global(.portrait-editor-error-badge.is-open .portrait-editor-error-tooltip) {
+      display: flex;
+    }
+
     :global(.portrait-editor-error-dot) {
       width: 6px;
       height: 6px;
@@ -461,16 +510,18 @@ import { ProfilesShader } from "../components/profiles-shader";
 
     :global(.portrait-editor-error-tooltip) {
       position: absolute;
-      bottom: calc(100% + 10px);
+      bottom: calc(100% + 4px);
       left: 0;
-      z-index: 10;
+      z-index: 20;
       display: none;
+      flex-direction: column;
+      gap: 8px;
       width: max-content;
       max-width: min(420px, 70vw);
       padding: 10px 12px;
       border-radius: 10px;
       border: 1px solid rgba(255, 255, 255, 0.14);
-      background: rgba(12, 12, 16, 0.96);
+      background: rgba(12, 12, 16, 0.98);
       color: rgba(255, 255, 255, 0.88);
       font-size: 11.5px;
       font-weight: 400;
@@ -478,12 +529,37 @@ import { ProfilesShader } from "../components/profiles-shader";
       white-space: normal;
       word-break: break-word;
       box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
-      pointer-events: none;
+      pointer-events: auto;
     }
 
-    :global(.portrait-editor-error-badge:hover .portrait-editor-error-tooltip),
-    :global(.portrait-editor-error-badge:focus-within .portrait-editor-error-tooltip) {
-      display: block;
+    /* Invisible hover bridge between badge and tooltip */
+    :global(.portrait-editor-error-tooltip::after) {
+      content: "";
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      height: 8px;
+    }
+
+    :global(.portrait-editor-error-message) {
+      margin: 0;
+    }
+
+    :global(.portrait-editor-error-copy) {
+      align-self: flex-start;
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.82);
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    :global(.portrait-editor-error-copy:hover) {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
     }
 
     :global(.portrait-editor-footer-hint) {
@@ -528,6 +604,13 @@ import { ProfilesShader } from "../components/profiles-shader";
 
     :global(.portrait-editor-btn-primary:hover:not(:disabled)) {
       filter: brightness(1.08);
+    }
+
+    /* Hide shader dev panel while the portrait studio is open */
+    :global(body.portrait-studio-active [data-shader-dev]),
+    :global(body.portrait-studio-active .sd-edge-sensor) {
+      visibility: hidden !important;
+      pointer-events: none !important;
     }
   </style>
 </Layout>

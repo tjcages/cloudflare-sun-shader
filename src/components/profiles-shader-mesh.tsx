@@ -14,7 +14,9 @@ import {
   TextureLoader,
   Vector2,
 } from "three"
+import { advanceShaderDevAnimationDelta } from "shader-panel"
 import type { ProfilesShaderConfig } from "./profiles-shader-config"
+import { sampleLightPath } from "./profiles-light-path"
 import {
   PROFILES_SHADER_FRAGMENT,
   PROFILES_SHADER_VERTEX,
@@ -230,6 +232,8 @@ export function ProfilesMesh({ config, onLightPosChange }: ProfilesMeshProps) {
         intensity: config.light1Intensity,
         diffuse: config.light1Diffuse,
         glow: config.light1Glow,
+        animate: config.light1Animate,
+        path: config.light1Path,
       },
       {
         enabled: config.light2Enabled,
@@ -240,6 +244,8 @@ export function ProfilesMesh({ config, onLightPosChange }: ProfilesMeshProps) {
         intensity: config.light2Intensity,
         diffuse: config.light2Diffuse,
         glow: config.light2Glow,
+        animate: config.light2Animate,
+        path: config.light2Path,
       },
       {
         enabled: config.light3Enabled,
@@ -250,12 +256,17 @@ export function ProfilesMesh({ config, onLightPosChange }: ProfilesMeshProps) {
         intensity: config.light3Intensity,
         diffuse: config.light3Diffuse,
         glow: config.light3Glow,
+        animate: config.light3Animate,
+        path: config.light3Path,
       },
     ]
     lights.forEach((l, i) => {
       uniforms.uLightEnabled.value[i] = l.enabled ? 1 : 0
       uniforms.uLightColor.value[i].set(l.color)
-      uniforms.uLightPos.value[i].set(l.pos[0], l.pos[1])
+      const animating = l.animate && l.path.length > 0
+      if (!animating) {
+        uniforms.uLightPos.value[i].set(l.pos[0], l.pos[1])
+      }
       uniforms.uLightZ.value[i] = l.z
       uniforms.uLightRadius.value[i] = l.radius
       uniforms.uLightIntensity.value[i] = l.intensity
@@ -280,19 +291,54 @@ export function ProfilesMesh({ config, onLightPosChange }: ProfilesMeshProps) {
     uniforms.uOverlayScanOnly.value = config.overlayScanOnly ? 1 : 0
   }, [config, uniforms])
 
+  const dragLightRef = useRef<number | null>(null)
+  const configRef = useRef(config)
+  const animTimeRef = useRef(0)
+  configRef.current = config
+
   useFrame((state, delta) => {
+    const { time } = advanceShaderDevAnimationDelta(animTimeRef.current)
+    animTimeRef.current = time
     uniforms.uTime.value += delta
-    // Smoothed pointer — the parallax should trail the cursor, not snap.
     uniforms.uPointer.value.lerp(state.pointer, 0.06)
+
+    const c = configRef.current
+    const dragging = dragLightRef.current
+    const lightDefs = [
+      {
+        animate: c.light1Animate,
+        path: c.light1Path,
+        pos: c.light1Pos,
+        loop: c.light1Loop,
+        speed: c.light1Speed,
+      },
+      {
+        animate: c.light2Animate,
+        path: c.light2Path,
+        pos: c.light2Pos,
+        loop: c.light2Loop,
+        speed: c.light2Speed,
+      },
+      {
+        animate: c.light3Animate,
+        path: c.light3Path,
+        pos: c.light3Pos,
+        loop: c.light3Loop,
+        speed: c.light3Speed,
+      },
+    ]
+
+    lightDefs.forEach((l, i) => {
+      if (dragging === i) return
+      if (!l.animate || l.path.length === 0) return
+      const [x, y] = sampleLightPath(l.pos, l.path, time, l.speed, l.loop)
+      uniforms.uLightPos.value[i].set(x, y)
+    })
   })
 
   // --- Draggable light helpers -------------------------------------------
   // With helpers visible, pointer-down near a ring grabs that light; drags
   // re-position it in light space ((uv - 0.5) * 2 * [aspect, 1]).
-  const dragLightRef = useRef<number | null>(null)
-  const configRef = useRef(config)
-  configRef.current = config
-
   const lightAtUv = useCallback(
     (uvX: number, uvY: number): number => {
       const c = configRef.current
@@ -301,17 +347,17 @@ export function ProfilesMesh({ config, onLightPosChange }: ProfilesMeshProps) {
       const py = (uvY - 0.5) * 2
       const lights: {
         enabled: boolean
-        pos: readonly [number, number]
+        pos: Vector2
       }[] = [
-        { enabled: c.light1Enabled, pos: c.light1Pos },
-        { enabled: c.light2Enabled, pos: c.light2Pos },
-        { enabled: c.light3Enabled, pos: c.light3Pos },
+        { enabled: c.light1Enabled, pos: uniforms.uLightPos.value[0] },
+        { enabled: c.light2Enabled, pos: uniforms.uLightPos.value[1] },
+        { enabled: c.light3Enabled, pos: uniforms.uLightPos.value[2] },
       ]
       let best = -1
       let bestDist = LIGHT_GRAB_RADIUS
       lights.forEach((l, i) => {
         if (!l.enabled) return
-        const d = Math.hypot(px - l.pos[0], py - l.pos[1])
+        const d = Math.hypot(px - l.pos.x, py - l.pos.y)
         if (d < bestDist) {
           best = i
           bestDist = d

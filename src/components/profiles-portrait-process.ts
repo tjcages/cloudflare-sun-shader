@@ -4,6 +4,11 @@
  */
 
 import { recomposePortraitWithAi } from "./profiles-portrait-ai"
+import {
+  compositeCutoutOnBackground,
+  imageDataToObjectUrl,
+} from "./profiles-portrait-background"
+import { removePortraitBackground } from "./profiles-portrait-bg"
 import { analyzePortraitFace } from "./profiles-portrait-face"
 import type {
   PortraitFaceAnalysis,
@@ -78,6 +83,27 @@ async function applyStyleGrade(
   return URL.createObjectURL(blob)
 }
 
+async function applyPortraitFinish(
+  imageUrl: string,
+  settings: PortraitStyleSettings,
+  onProgress?: PortraitProgressHandler,
+): Promise<string> {
+  let url = imageUrl
+
+  if (settings.removeBackground) {
+    onProgress?.("Replacing background…")
+    const cutout = await removePortraitBackground(url, onProgress)
+    const composited = compositeCutoutOnBackground(
+      cutout,
+      settings.backgroundColor,
+    )
+    url = await imageDataToObjectUrl(composited)
+  }
+
+  onProgress?.("Applying color grade…")
+  return applyStyleGrade(url, settings)
+}
+
 export type ProcessPortraitResult = {
   url: string
   faceAnalysis: PortraitFaceAnalysis
@@ -105,10 +131,10 @@ export async function processPortrait(
     imageSrc,
     settings.composition,
     onProgress,
+    faceAnalysis,
   )
 
-  onProgress?.("Applying color grade…")
-  const url = await applyStyleGrade(aiUrl, settings)
+  const url = await applyPortraitFinish(aiUrl, settings, onProgress)
 
   return { url, faceAnalysis, aiUrl }
 }
@@ -119,6 +145,5 @@ export async function regradePortrait(
   settings: PortraitStyleSettings,
   onProgress?: PortraitProgressHandler,
 ): Promise<string> {
-  onProgress?.("Applying color grade…")
-  return applyStyleGrade(aiImageUrl, settings)
+  return applyPortraitFinish(aiImageUrl, settings, onProgress)
 }

@@ -2,7 +2,12 @@
 
 import { Canvas } from "@react-three/fiber"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { useShaderDev } from "shader-panel"
+import {
+  readShaderDevOpenFlag,
+  SHADER_DEV_TOGGLE_EVENT,
+  useShaderDev,
+  writeShaderDevOpenFlag,
+} from "shader-panel"
 import { cn } from "../lib/utils"
 import { generateDepthMap } from "./profiles-depth"
 import { PortraitEditor } from "./profiles-portrait-editor"
@@ -14,11 +19,27 @@ import {
   type ProfilesShaderConfig,
 } from "./profiles-shader-config"
 import { PROFILES_SHADER_DEV_FIELDS } from "./profiles-shader-fields"
+import { stripAnchorDuplicateWaypoints } from "./profiles-light-path"
 import type { PortraitStyleSettings } from "./profiles-portrait-types"
 import { ProfilesMesh } from "./profiles-shader-mesh"
 
 interface ProfilesShaderProps {
   className?: string
+}
+
+/** Clone a blob/object URL so the parent owns it after the editor unmounts. */
+async function adoptObjectUrl(url: string): Promise<string> {
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error("Failed to read portrait image")
+  }
+  const blob = await response.blob()
+  return URL.createObjectURL(blob)
+}
+
+function setShaderDevPanelOpen(open: boolean): void {
+  writeShaderDevOpenFlag(open)
+  window.dispatchEvent(new CustomEvent(SHADER_DEV_TOGGLE_EVENT))
 }
 
 export function ProfilesShader({ className }: ProfilesShaderProps) {
@@ -57,10 +78,30 @@ export function ProfilesShader({ className }: ProfilesShaderProps) {
 
   const [status, setStatus] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
-  const portraitReadyRef = useRef(true)
   const editorAppliedRef = useRef(false)
+  const devPanelWasOpenRef = useRef(false)
 
-  // Intercept panel uploads — the image field writes blob URLs directly to config.
+  // Studio and dev panel are mutually exclusive — restore panel state on close.
+  useEffect(() => {
+    if (editorOpen) {
+      devPanelWasOpenRef.current = readShaderDevOpenFlag()
+      if (devPanelWasOpenRef.current) {
+        setShaderDevPanelOpen(false)
+      }
+      document.body.classList.add("portrait-studio-active")
+      return () => {
+        document.body.classList.remove("portrait-studio-active")
+      }
+    }
+
+    document.body.classList.remove("portrait-studio-active")
+    if (devPanelWasOpenRef.current) {
+      setShaderDevPanelOpen(true)
+      devPanelWasOpenRef.current = false
+    }
+  }, [editorOpen])
+
+  // Optional: open the AI portrait studio after a panel upload.
   useEffect(() => {
     if (editorAppliedRef.current) {
       editorAppliedRef.current = false
@@ -75,7 +116,6 @@ export function ProfilesShader({ className }: ProfilesShaderProps) {
       !editorOpen &&
       editorSource !== src
     ) {
-      portraitReadyRef.current = false
       openPortraitEditor(src)
     }
   }, [
@@ -103,7 +143,6 @@ export function ProfilesShader({ className }: ProfilesShaderProps) {
   useEffect(() => {
     const src = config.imageSrc
     if (!src || src === processedSrcRef.current) return
-    if (!portraitReadyRef.current) return
     processedSrcRef.current = src
 
     if (src === PROFILES_SHADER_DEFAULTS.imageSrc) {
@@ -116,11 +155,9 @@ export function ProfilesShader({ className }: ProfilesShaderProps) {
       return
     }
 
-    // Flat-depth fallback renders while the model runs.
     setConfig({ ...configRef.current, depthSrc: "" })
     generateDepthMap(src, setStatus)
       .then((depthUrl) => {
-        // A newer upload may have superseded this one.
         if (configRef.current.imageSrc !== src) return
         setConfig({ ...configRef.current, depthSrc: depthUrl })
         setStatus(null)
@@ -133,14 +170,26 @@ export function ProfilesShader({ className }: ProfilesShaderProps) {
       })
   }, [config.imageSrc, setConfig])
 
-  // Dragging a light helper ring on the canvas re-positions that light.
   const handleLightPosChange = useCallback(
     (lightIndex: number, pos: readonly [number, number]) => {
-      const key = `light${lightIndex + 1}Pos` as
+      const n = lightIndex + 1
+      const posKey = `light${n}Pos` as
         | "light1Pos"
         | "light2Pos"
         | "light3Pos"
-      setConfig({ ...configRef.current, [key]: pos })
+      const pathKey = `light${n}Path` as
+        | "light1Path"
+        | "light2Path"
+        | "light3Path"
+      const path = stripAnchorDuplicateWaypoints(
+        pos,
+        configRef.current[pathKey],
+      )
+      setConfig({
+        ...configRef.current,
+        [posKey]: pos,
+        [pathKey]: path,
+      })
     },
     [setConfig],
   )
@@ -151,12 +200,10 @@ export function ProfilesShader({ className }: ProfilesShaderProps) {
       const objectUrl = URL.createObjectURL(file)
 
       if (configRef.current.portraitAutoProcess) {
-        portraitReadyRef.current = false
         openPortraitEditor(objectUrl)
         return
       }
 
-      portraitReadyRef.current = true
       setConfig({
         ...configRef.current,
         imageSrc: objectUrl,
@@ -166,40 +213,60 @@ export function ProfilesShader({ className }: ProfilesShaderProps) {
   )
 
   const handleEditorApply = useCallback(
-    (processedUrl: string, settings: PortraitStyleSettings) => {
+    async (processedUrl: string, settings: PortraitStyleSettings) => {
       editorAppliedRef.current = true
-      portraitReadyRef.current = true
-      processedSrcRef.current = ""
-      setConfig({
-        ...configRef.current,
-        imageSrc: processedUrl,
-        ...portraitSettingsToConfig(settings),
-      })
-      setEditorOpen(false)
-      setEditorSource(null)
-      setEditorSettings(null)
+      try {
+        const ownedUrl = await adoptObjectUrl(processedUrl)
+        processedSrcRef.current = ""
+        setConfig({
+          ...configRef.current,
+          imageSrc: ownedUrl,
+          ...portraitSettingsToConfig(settings),
+        })
+        setEditorOpen(false)
+        setEditorSource(null)
+        setEditorSettings(null)
+      } catch (err) {
+        editorAppliedRef.current = false
+        setStatus(
+          `Portrait apply failed: ${err instanceof Error ? err.message : String(err)}`,
+        )
+      }
     },
     [setConfig],
   )
 
   const handleEditorSkip = useCallback(
-    (originalUrl: string) => {
+    async (originalUrl: string) => {
       editorAppliedRef.current = true
-      portraitReadyRef.current = true
-      processedSrcRef.current = ""
-      setConfig({
-        ...configRef.current,
-        imageSrc: originalUrl,
-      })
-      setEditorOpen(false)
-      setEditorSource(null)
-      setEditorSettings(null)
+      try {
+        const currentSrc = configRef.current.imageSrc
+        if (currentSrc !== originalUrl) {
+          const ownedUrl = await adoptObjectUrl(originalUrl)
+          processedSrcRef.current = ""
+          setConfig({
+            ...configRef.current,
+            imageSrc: ownedUrl,
+          })
+        }
+        setEditorOpen(false)
+        setEditorSource(null)
+        setEditorSettings(null)
+      } catch (err) {
+        editorAppliedRef.current = false
+        setStatus(
+          `Portrait apply failed: ${err instanceof Error ? err.message : String(err)}`,
+        )
+      }
     },
     [setConfig],
   )
 
   const handleEditorClose = useCallback(() => {
-    if (editorSource?.startsWith("blob:")) {
+    if (
+      editorSource?.startsWith("blob:") &&
+      editorSource !== configRef.current.imageSrc
+    ) {
       URL.revokeObjectURL(editorSource)
     }
     setEditorOpen(false)

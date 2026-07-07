@@ -183,11 +183,25 @@ export const PROFILES_SHADER_DEV_FIELDS: ShaderDevFieldDef<ProfilesShaderConfig>
       description: "Color grade applied after AI recomposition.",
     },
     {
+      type: "color",
+      key: "portraitBgColor",
+      label: "Background",
+      description:
+        "Solid backdrop behind the subject — orange, white, black, or any custom color.",
+    },
+    {
+      type: "toggle",
+      key: "portraitRemoveBg",
+      label: "Replace background",
+      description:
+        "Remove the AI backdrop and composite the subject on the background color.",
+    },
+    {
       type: "toggle",
       key: "portraitAutoProcess",
-      label: "Auto-standardize uploads",
+      label: "Open AI studio on upload",
       description:
-        "Open the portrait editor automatically when a new photo is uploaded.",
+        "When enabled, uploads open the optional AI portrait studio. Off = use the photo directly and generate depth immediately.",
     },
     {
       type: "slider",

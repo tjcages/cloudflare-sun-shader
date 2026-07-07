@@ -1,11 +1,11 @@
 /**
  * Face detection via MediaPipe Face Landmarker.
  *
- * Extracts normalized face metrics used to position and scale the subject
- * into standardized composition templates (headshot, stage, speaker, etc.).
+ * Extracts normalized face metrics used for AI identity reference crops.
  */
 
 import type {
+  PortraitCompositionId,
   PortraitFaceAnalysis,
   PortraitFaceBox,
   PortraitProgressHandler,
@@ -15,6 +15,8 @@ const WASM_CDN =
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm"
 const MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
+
+const AI_INPUT_MAX = 512
 
 type FaceLandmarkerInstance = {
   detect: (image: HTMLCanvasElement | HTMLImageElement) => {
@@ -75,7 +77,6 @@ function metricsFromLandmarks(
     maxY = Math.max(maxY, pt.y)
   }
 
-  // Slightly expand the box — landmarks hug the skin, not hair/ears.
   const padX = (maxX - minX) * 0.12
   const padTop = (maxY - minY) * 0.35
   const padBottom = (maxY - minY) * 0.08
@@ -112,7 +113,6 @@ function metricsFromLandmarks(
   }
 }
 
-/** Fallback when no face is detected — center-weighted guess. */
 function fallbackMetrics(): Omit<PortraitFaceAnalysis, "confidence"> {
   return {
     faceBox: { x: 0.28, y: 0.12, width: 0.44, height: 0.5 },
@@ -120,6 +120,23 @@ function fallbackMetrics(): Omit<PortraitFaceAnalysis, "confidence"> {
     forehead: [0.5, 0.12],
     chin: [0.5, 0.62],
   }
+}
+
+function scaleToMaxEdge(width: number, height: number, maxEdge: number) {
+  const longest = Math.max(width, height)
+  const scale = maxEdge / longest
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  }
+}
+
+async function imageToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, "image/png"),
+  )
+  if (!blob) throw new Error("Failed to encode image PNG")
+  return blob
 }
 
 /**
@@ -144,4 +161,73 @@ export async function analyzePortraitFace(
     ...metricsFromLandmarks(result.faceLandmarks[0]),
     confidence: 1,
   }
+}
+
+/**
+ * Tight face crop for FLUX identity reference (input_image_1).
+ */
+export async function createFaceReferenceBlob(
+  imageSrc: string,
+  faceBox: PortraitFaceBox,
+): Promise<Blob> {
+  const img = await loadImageElement(imageSrc)
+  const pad = 0.08
+  const x = Math.max(0, Math.floor((faceBox.x - pad) * img.naturalWidth))
+  const y = Math.max(0, Math.floor((faceBox.y - pad) * img.naturalHeight))
+  const w = Math.min(
+    img.naturalWidth - x,
+    Math.ceil((faceBox.width + pad * 2) * img.naturalWidth),
+  )
+  const h = Math.min(
+    img.naturalHeight - y,
+    Math.ceil((faceBox.height + pad * 2) * img.naturalHeight),
+  )
+
+  const scaled = scaleToMaxEdge(w, h, AI_INPUT_MAX)
+  const canvas = document.createElement("canvas")
+  canvas.width = scaled.width
+  canvas.height = scaled.height
+  const ctx = canvas.getContext("2d")
+  if (!ctx) throw new Error("Canvas 2D context unavailable")
+  ctx.drawImage(img, x, y, w, h, 0, 0, scaled.width, scaled.height)
+  return imageToPngBlob(canvas)
+}
+
+/**
+ * Face-centered portrait crop for the main FLUX reference (input_image_0).
+ * Maximizes facial detail within the 512px input limit.
+ */
+export async function createPortraitReferenceBlob(
+  imageSrc: string,
+  faceAnalysis?: PortraitFaceAnalysis,
+  composition?: PortraitCompositionId,
+): Promise<Blob> {
+  const img = await loadImageElement(imageSrc)
+
+  let sx = 0
+  let sy = 0
+  let sw = img.naturalWidth
+  let sh = img.naturalHeight
+
+  if (faceAnalysis && faceAnalysis.confidence > 0) {
+    const { faceBox, center } = faceAnalysis
+    // Wider crops reduce Workers AI false-positive moderation on close framing.
+    const isClose = composition === "close"
+    const cropW = Math.min(1, faceBox.width * (isClose ? 3.0 : 2.4))
+    const cropH = Math.min(1, faceBox.height * (isClose ? 4.0 : 3.2))
+    const anchorY = isClose ? 0.38 : 0.42
+    sx = Math.max(0, (center[0] - cropW / 2) * img.naturalWidth)
+    sy = Math.max(0, (center[1] - cropH * anchorY) * img.naturalHeight)
+    sw = Math.min(img.naturalWidth - sx, cropW * img.naturalWidth)
+    sh = Math.min(img.naturalHeight - sy, cropH * img.naturalHeight)
+  }
+
+  const scaled = scaleToMaxEdge(sw, sh, AI_INPUT_MAX)
+  const canvas = document.createElement("canvas")
+  canvas.width = scaled.width
+  canvas.height = scaled.height
+  const ctx = canvas.getContext("2d")
+  if (!ctx) throw new Error("Canvas 2D context unavailable")
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, scaled.width, scaled.height)
+  return imageToPngBlob(canvas)
 }

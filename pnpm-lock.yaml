@@ -52,7 +52,7 @@ importers:
         version: 19.2.7(react@19.2.7)
       shader-panel:
         specifier: github:tjcages/shader-panel
-        version: https://codeload.github.com/tjcages/shader-panel/tar.gz/2d3201980cc6001997537d32ecabfe9900157a8d(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: https://codeload.github.com/tjcages/shader-panel/tar.gz/8f2d1b77b8c5d9385e531ef6a5cb7e1a6599aadd(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       tailwindcss:
         specifier: ^4.1.18
         version: 4.3.0
@@ -2437,8 +2437,8 @@ packages:
     resolution: {integrity: sha512-8I8TjW5KMOKsZQTvoxjuSIa7foAwPWGOts+6o7sgjz41/qMD9VQHEDxi6PBvK2l0MXUmqZyNpUK+T2tQaaElvw==}
     engines: {node: '>=10'}
 
-  shader-panel@https://codeload.github.com/tjcages/shader-panel/tar.gz/2d3201980cc6001997537d32ecabfe9900157a8d:
-    resolution: {tarball: https://codeload.github.com/tjcages/shader-panel/tar.gz/2d3201980cc6001997537d32ecabfe9900157a8d}
+  shader-panel@https://codeload.github.com/tjcages/shader-panel/tar.gz/8f2d1b77b8c5d9385e531ef6a5cb7e1a6599aadd:
+    resolution: {tarball: https://codeload.github.com/tjcages/shader-panel/tar.gz/8f2d1b77b8c5d9385e531ef6a5cb7e1a6599aadd}
     version: 1.0.0
     engines: {node: '>=18'}
     peerDependencies:
@@ -5347,7 +5347,7 @@ snapshots:
     dependencies:
       type-fest: 0.13.1
 
-  shader-panel@https://codeload.github.com/tjcages/shader-panel/tar.gz/2d3201980cc6001997537d32ecabfe9900157a8d(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+  shader-panel@https://codeload.github.com/tjcages/shader-panel/tar.gz/8f2d1b77b8c5d9385e531ef6a5cb7e1a6599aadd(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
     dependencies:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)

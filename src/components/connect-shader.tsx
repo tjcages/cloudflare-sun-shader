@@ -12,17 +12,18 @@ import {
 } from "./connect-shader-config"
 import { CONNECT_SHADER_DEV_FIELDS } from "./connect-shader-fields"
 import { ConnectEmitter, ConnectMesh } from "./connect-shader-mesh"
+import {
+  ConnectPostPipeline,
+  useConnectPostFx,
+} from "./connect-postfx"
 
 interface ConnectShaderProps {
   className?: string
 }
 
 export function ConnectShader({ className }: ConnectShaderProps) {
-  // One call: owns state, registers, and injects the panel. No <ShaderDevRoot/>.
-  // Fresh id per defaults overhaul: the panel persists values per id, so an
-  // id bump is the only way retuned defaults actually reach existing browsers.
   const [config] = useShaderDev<ConnectShaderConfig>({
-    id: "connect-v4",
+    id: "connect-v6",
     title: "Connect shader",
     defaults: CONNECT_SHADER_DEFAULTS,
     fields: CONNECT_SHADER_DEV_FIELDS,
@@ -37,7 +38,8 @@ export function ConnectShader({ className }: ConnectShaderProps) {
       )}
     >
       <Canvas
-        dpr={[1, 1.75]}
+        key={config.renderAntialias ? "connect-aa" : "connect-no-aa"}
+        dpr={config.renderDpr}
         onContextMenu={(event) => event.preventDefault()}
         camera={{
           position: [0, config.cameraY, config.cameraZ],
@@ -48,29 +50,39 @@ export function ConnectShader({ className }: ConnectShaderProps) {
         // preserveDrawingBuffer keeps the last frame readable so the panel's
         // image export (canvas.toBlob) captures actual pixels, not a blank
         // buffer.
-        gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
+        gl={{
+          antialias: config.renderAntialias,
+          alpha: true,
+          preserveDrawingBuffer: true,
+        }}
         style={{ width: "100%", height: "100%" }}
       >
-        <color attach="background" args={["#ffffff"]} />
-        <ConnectMesh config={config} position={[0, 0, 0]} rotation={[0, 0, 0]} />
-        <ConnectEmitter config={config} />
-        <CameraSync
-          y={config.cameraY}
-          z={config.cameraZ}
-          fov={config.cameraFov}
-        />
-        <HiResCapture />
-        {/* TrackballControls (not OrbitControls) so rotation is unlocked on
-            all axes. Pan: right-drag, shift+left-drag, or middle-drag. */}
-        <ConnectTrackballControls
-          makeDefault
-          rotateSpeed={3.5}
-          zoomSpeed={1.2}
-          panSpeed={1.2}
-          noPan={false}
-          dynamicDampingFactor={0.15}
-          minDistance={0.5}
-          maxDistance={120}
+        <RenderDprSync dpr={config.renderDpr} />
+        <ConnectPostPipeline
+          config={config}
+          scene={
+            <>
+              <color attach="background" args={["#ffffff"]} />
+              <ConnectMesh config={config} position={[0, 0, 0]} rotation={[0, 0, 0]} />
+              <ConnectEmitter config={config} />
+              <CameraSync
+                y={config.cameraY}
+                z={config.cameraZ}
+                fov={config.cameraFov}
+              />
+              <ConnectTrackballControls
+                makeDefault
+                rotateSpeed={3.5}
+                zoomSpeed={1.2}
+                panSpeed={1.2}
+                noPan={false}
+                dynamicDampingFactor={0.15}
+                minDistance={0.5}
+                maxDistance={120}
+              />
+            </>
+          }
+          overlay={<HiResCapture />}
         />
       </Canvas>
     </div>
@@ -99,12 +111,13 @@ function HiResCapture() {
   const scene = useThree((s) => s.scene)
   const camera = useThree((s) => s.camera)
   const size = useThree((s) => s.size)
-  const live = useRef({ gl, scene, camera, size })
-  live.current = { gl, scene, camera, size }
+  const postFx = useConnectPostFx()
+  const live = useRef({ gl, scene, camera, size, postFx })
+  live.current = { gl, scene, camera, size, postFx }
 
   useEffect(() => {
     return registerShaderCapture(async ({ maxEdge }) => {
-      const { gl, scene, camera, size } = live.current
+      const { gl, scene, camera, size, postFx: fx } = live.current
       const ctx = gl.getContext()
       // The drawing buffer can't exceed the smaller of the texture and
       // renderbuffer limits (the default framebuffer needs both, and with
@@ -139,14 +152,22 @@ function HiResCapture() {
           gl.setSize(tw, th, false)
         }
 
-        gl.render(scene, camera)
+        if (fx) {
+          fx.renderFrame(gl, camera, tw, th)
+        } else {
+          gl.render(scene, camera)
+        }
         // Synchronous read — nothing can repaint between render and read.
         const url = gl.domElement.toDataURL("image/png")
         return dataUrlToBlob(url)
       } finally {
         gl.setPixelRatio(prevDpr)
         gl.setSize(w, h, false)
-        gl.render(scene, camera)
+        if (fx) {
+          fx.renderFrame(gl, camera, w, h)
+        } else {
+          gl.render(scene, camera)
+        }
       }
     })
   }, [])
@@ -220,6 +241,18 @@ function ConnectTrackballControls(
       {...props}
     />
   )
+}
+
+function RenderDprSync({ dpr }: { dpr: number }) {
+  const gl = useThree((s) => s.gl)
+  const size = useThree((s) => s.size)
+
+  useEffect(() => {
+    gl.setPixelRatio(dpr)
+    gl.setSize(size.width, size.height, false)
+  }, [dpr, gl, size.width, size.height])
+
+  return null
 }
 
 function CameraSync({ y, z, fov }: { y: number; z: number; fov: number }) {

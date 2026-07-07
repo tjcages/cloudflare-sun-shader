@@ -27,6 +27,33 @@ export const CONNECT_SHADER_NOISE_UTILS = /* glsl */ `
     return fract((p3.x + p3.y) * p3.z);
   }
 
+  // Panel hex colors arrive sRGB-encoded; compositing must run in linear light.
+  vec3 srgbToLinear(vec3 c) {
+    vec3 lo = c * 0.0773993808;
+    vec3 hi = pow(c * 0.9478672986 + 0.0521327014, vec3(2.4));
+    return mix(lo, hi, step(vec3(0.04045), c));
+  }
+
+  vec3 linearToSrgb(vec3 c) {
+    c = max(c, vec3(0.0));
+    vec3 lo = c * 12.92;
+    vec3 hi = 1.055 * pow(c, vec3(0.4166667)) - 0.055;
+    return mix(lo, hi, step(vec3(0.0031308), c));
+  }
+
+  // TPDF dither — triangular PDF via two uniform samples, animated per frame.
+  float tpdfDither(vec2 px, float t) {
+    float n1 = hash(px + vec2(t * 17.0, t * 13.0));
+    float n2 = hash(px + vec2(t * 31.0 + 7.0, t * 23.0 + 3.0));
+    return (n1 + n2 - 1.0) / 255.0;
+  }
+
+  vec3 connectOutputColor(vec3 linearRgb, vec2 px, float t) {
+    vec3 enc = linearToSrgb(linearRgb);
+    enc += tpdfDither(px, t);
+    return enc;
+  }
+
   vec3 permute(vec3 x) {
     return mod(((x * 34.0) + 1.0) * x, 289.0);
   }
@@ -105,6 +132,7 @@ export const CONNECT_SHADER_VERTEX = /* glsl */ `
 export const CONNECT_BASE_FRAGMENT = /* glsl */ `
   precision mediump float;
 
+  uniform highp float uTime;
   uniform vec3 uFillColor;
   uniform vec3 uFillColor2;
   uniform float uFillAlpha;
@@ -147,12 +175,17 @@ export const CONNECT_BASE_FRAGMENT = /* glsl */ `
     float fillS = smoothstep(fillLo, uFillHigh, n01);
     // Slow gradient noise — interpolated from the vertex shader.
     float g = vFillGrad * 0.5 + 0.5;
-    vec3 gradCol = mix(uFillColor, uFillColor2, g);
-    // Deepen the very peaks for extra body.
-    gradCol = mix(gradCol, uDeepColor, smoothstep(0.82, 1.0, n01) * 0.55);
-    vec3 fillCol = mix(uPaleColor, gradCol, fillS);
-    float fillA = uFillAlpha * fillS;
-    vec4 acc = vec4(fillCol * fillA, fillA);
+    vec3 fillLinA = srgbToLinear(uFillColor);
+    vec3 fillLinB = srgbToLinear(uFillColor2);
+    vec3 deepL = srgbToLinear(uDeepColor);
+    vec3 paleL = srgbToLinear(uPaleColor);
+    vec3 lineL = srgbToLinear(uLineColor);
+
+    vec3 gradCol = mix(fillLinA, fillLinB, g);
+    gradCol = mix(gradCol, deepL, smoothstep(0.82, 1.0, n01) * 0.55);
+    vec3 fillCol = mix(paleL, gradCol, fillS);
+    float fillAlpha = uFillAlpha * fillS;
+    vec4 acc = vec4(fillCol * fillAlpha, fillAlpha);
 
     // === Stripe lines ringing the cylinder ===
     float v = vUv.y * uLineCount;
@@ -164,12 +197,15 @@ export const CONNECT_BASE_FRAGMENT = /* glsl */ `
     float dn = vLineDissolve * 0.5 + 0.5;
     float dissolve = smoothstep(uLineFadeLow, uLineFadeHigh, dn);
     float lineA = line * uLineAlpha * alias * dissolve;
-    acc = blendOver(vec4(uLineColor * lineA, lineA), acc);
+    acc = blendOver(vec4(lineL * lineA, lineA), acc);
 
     float outA = acc.a;
-    fragColor = outA < 0.003
-      ? vec4(0.0)
-      : vec4(acc.rgb / max(outA, 1e-3), outA);
+    if (outA < 0.003) {
+      fragColor = vec4(0.0);
+      return;
+    }
+    vec3 outRgb = acc.rgb / max(outA, 1e-3);
+    fragColor = vec4(connectOutputColor(outRgb, gl_FragCoord.xy, uTime), outA);
   }
 `
 
@@ -235,6 +271,12 @@ export const CONNECT_HATCH_FRAGMENT = /* glsl */ `
     float nA = vNoise * 0.5 + 0.5;
     float gate = mix(1.0, smoothstep(0.35, 0.78, nA), uWaveGate);
 
+    vec3 paleL = srgbToLinear(uPaleColor);
+    vec3 salmonL = srgbToLinear(uSalmonColor);
+    vec3 orangeL = srgbToLinear(uOrangeColor);
+    vec3 amberL = srgbToLinear(uAmberColor);
+    vec3 deepL = srgbToLinear(uDeepColor);
+
     vec4 acc = vec4(0.0);
     float baseAng = radians(uHatchAngle);
     float bc = cos(baseAng);
@@ -281,22 +323,26 @@ export const CONNECT_HATCH_FRAGMENT = /* glsl */ `
       float m = smoothstep(0.0, aaU * 1.5, duEdge) * smoothstep(0.0, aaW * 1.5, dwEdge);
 
       float c = hash(seed + 23.9);
-      vec3 dashColor = c < 0.24 ? uPaleColor
-        : c < 0.44 ? uSalmonColor
-        : c < 0.68 ? uOrangeColor
-        : c < 0.88 ? uAmberColor
-        : uDeepColor;
+      vec3 dashColor = c < 0.24 ? paleL
+        : c < 0.44 ? salmonL
+        : c < 0.68 ? orangeL
+        : c < 0.88 ? amberL
+        : deepL;
       float sat = clamp(dens * 2.2, 0.0, 1.0);
-      dashColor = mix(mix(uPaleColor, dashColor, 0.55), dashColor, sat);
+      dashColor = mix(mix(paleL, dashColor, 0.55), dashColor, sat);
 
       float dashA = ALPHA_MUL[L] * m * vis * mix(0.8, 1.0, s3);
       acc = blendOver(vec4(dashColor * dashA, dashA), acc);
     }
 
     float outA = acc.a;
-    fragColor = outA < 0.003
-      ? vec4(0.0)
-      : vec4(acc.rgb / max(outA, 1e-3), outA);
+    if (outA < 0.003) {
+      fragColor = vec4(0.0);
+      return;
+    }
+    vec3 outRgb = acc.rgb / max(outA, 1e-3);
+    outRgb = outRgb / (1.0 + outRgb);
+    fragColor = vec4(connectOutputColor(outRgb, gl_FragCoord.xy, uTime), outA);
   }
 `
 
@@ -384,11 +430,12 @@ export const CONNECT_EMITTER_VERTEX = /* glsl */ `
     vAlpha = act * fadeIn * fadeOut;
 
     float c = hash(vec2(aRand.y * 517.3, lifeId + 7.0));
-    vColor = c < 0.24 ? uPaleColor
+    vec3 pickColor = c < 0.24 ? uPaleColor
       : c < 0.44 ? uSalmonColor
       : c < 0.68 ? uOrangeColor
       : c < 0.88 ? uAmberColor
       : uDeepColor;
+    vColor = srgbToLinear(pickColor);
 
     // WORLD-unit sizing: uEmitSize is the dash length in world units, so the
     // sprite scales exactly like the mesh's hatch dashes at any camera zoom.
@@ -402,6 +449,7 @@ export const CONNECT_EMITTER_VERTEX = /* glsl */ `
 
 export const CONNECT_EMITTER_FRAGMENT = /* glsl */ `
   precision mediump float;
+  uniform highp float uTime;
   uniform float uEmitStretch;
   uniform float uEmitAlpha;
 
@@ -414,18 +462,16 @@ export const CONNECT_EMITTER_FRAGMENT = /* glsl */ `
   void main() {
     vec2 c = gl_PointCoord * 2.0 - 1.0;
     c.y = -c.y;
-    // Rectangular dash, long axis along the surface tangent — matches the
-    // hatch pattern instead of reading as a round spark.
     vec2 perp = vec2(-vDir.y, vDir.x);
     float along = dot(c, vDir);
     float across = dot(c, perp);
     float wHalf = clamp(1.0 / max(uEmitStretch, 1.0), 0.04, 1.0);
-    float mask = (1.0 - smoothstep(0.78, 0.92, abs(along)))
-      * (1.0 - smoothstep(wHalf * 0.7, wHalf, abs(across)));
+    float aaL = fwidth(along) * 1.5 + 1e-4;
+    float aaT = fwidth(across) * 1.5 + 1e-4;
+    float mask = (1.0 - smoothstep(1.0 - aaL, 1.0, abs(along)))
+      * (1.0 - smoothstep(wHalf - aaT, wHalf, abs(across)));
     float alpha = mask * vAlpha * uEmitAlpha;
     if (alpha < 0.004) discard;
-    // Straight alpha — matches the base/hatch passes and Three.js NormalBlending.
-    // Premultiplied rgb here reads as a dark halo at every soft edge.
-    fragColor = vec4(vColor, alpha);
+    fragColor = vec4(connectOutputColor(vColor, gl_FragCoord.xy, uTime), alpha);
   }
 `

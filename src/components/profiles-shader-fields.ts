@@ -143,15 +143,7 @@ export const PROFILES_SHADER_DEV_FIELDS: ShaderDevFieldDef<ProfilesShaderConfig>
       label: "Edit portrait",
       variant: "primary",
       description:
-        "Re-open the portrait editor to regenerate the photo in a new scenario before depth mapping.",
-      when: (values) => {
-        const src = values.imageSrc
-        return (
-          typeof src === "string" &&
-          src.length > 0 &&
-          !src.startsWith("/profiles/")
-        )
-      },
+        "Open the AI portrait studio to regenerate or re-grade the photo before depth mapping.",
     },
     { type: "section", title: "Portrait style" },
     {
@@ -301,6 +293,33 @@ export const PROFILES_SHADER_DEV_FIELDS: ShaderDevFieldDef<ProfilesShaderConfig>
     ...lightFields(1, "Light 1"),
     ...lightFields(2, "Light 2"),
     ...lightFields(3, "Light 3"),
+    { type: "section", title: "Depth splice" },
+    {
+      type: "toggle",
+      key: "depthSpliceEnabled",
+      label: "Enabled",
+      description:
+        "Blend the lit photo into a relit depth-map view — ambient tint, lights, glow, and scan all apply to the depth region.",
+    },
+    {
+      type: "slider",
+      key: "depthSplicePosition",
+      label: "Split height",
+      min: 0,
+      max: 1,
+      step: 0.01,
+      description:
+        "Vertical position of the transition (0 = bottom of frame, 1 = top).",
+    },
+    {
+      type: "slider",
+      key: "depthSpliceSoftness",
+      label: "Blend width",
+      min: 0.02,
+      max: 0.5,
+      step: 0.005,
+      description: "How soft the photo → depth gradient is.",
+    },
     { type: "section", title: "Depth scan" },
     {
       type: "toggle",

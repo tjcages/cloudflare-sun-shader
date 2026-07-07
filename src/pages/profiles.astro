@@ -105,6 +105,20 @@ import { ProfilesShader } from "../components/profiles-shader";
       background: rgba(0, 0, 0, 0.72);
       backdrop-filter: blur(18px);
       -webkit-backdrop-filter: blur(18px);
+      opacity: 0;
+      transition-property: opacity;
+      transition-duration: 220ms;
+      transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    :global(.portrait-editor-backdrop.is-active) {
+      opacity: 1;
+    }
+
+    :global(.portrait-editor-backdrop:not(.is-active)) {
+      transition-duration: 150ms;
+      transition-timing-function: ease-in;
     }
 
     :global(.portrait-editor) {
@@ -124,6 +138,71 @@ import { ProfilesShader } from "../components/profiles-shader";
         "Segoe UI",
         Roboto,
         sans-serif;
+      opacity: 0;
+      transform: translateY(12px) scale(0.98);
+      filter: blur(4px);
+      transition-property: opacity, transform, filter;
+      transition-duration: 320ms;
+      transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    :global(.portrait-editor-backdrop.is-active .portrait-editor) {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      filter: blur(0);
+    }
+
+    :global(.portrait-editor-backdrop:not(.is-active) .portrait-editor) {
+      transition-duration: 150ms;
+      transition-timing-function: ease-in;
+    }
+
+    :global(.portrait-editor-header),
+    :global(.portrait-editor-body),
+    :global(.portrait-editor-footer) {
+      opacity: 0;
+      transform: translateY(8px);
+      transition-property: opacity, transform;
+      transition-duration: 300ms;
+      transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    :global(.portrait-editor-backdrop.is-active .portrait-editor-header) {
+      opacity: 1;
+      transform: translateY(0);
+      transition-delay: 40ms;
+    }
+
+    :global(.portrait-editor-backdrop.is-active .portrait-editor-body) {
+      opacity: 1;
+      transform: translateY(0);
+      transition-delay: 100ms;
+    }
+
+    :global(.portrait-editor-backdrop.is-active .portrait-editor-footer) {
+      opacity: 1;
+      transform: translateY(0);
+      transition-delay: 160ms;
+    }
+
+    :global(.portrait-editor-backdrop:not(.is-active) .portrait-editor-header),
+    :global(.portrait-editor-backdrop:not(.is-active) .portrait-editor-body),
+    :global(.portrait-editor-backdrop:not(.is-active) .portrait-editor-footer) {
+      transition-delay: 0ms;
+      transition-duration: 120ms;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      :global(.portrait-editor-backdrop),
+      :global(.portrait-editor),
+      :global(.portrait-editor-header),
+      :global(.portrait-editor-body),
+      :global(.portrait-editor-footer) {
+        transition: none !important;
+        opacity: 1 !important;
+        transform: none !important;
+        filter: none !important;
+      }
     }
 
     :global(.portrait-editor-header) {
@@ -140,6 +219,7 @@ import { ProfilesShader } from "../components/profiles-shader";
       font-size: 18px;
       font-weight: 600;
       letter-spacing: -0.01em;
+      text-wrap: balance;
     }
 
     :global(.portrait-editor-subtitle) {
@@ -148,9 +228,11 @@ import { ProfilesShader } from "../components/profiles-shader";
       line-height: 1.45;
       color: rgba(255, 255, 255, 0.62);
       max-width: 52ch;
+      text-wrap: pretty;
     }
 
     :global(.portrait-editor-close) {
+      position: relative;
       flex-shrink: 0;
       display: grid;
       place-items: center;
@@ -162,6 +244,19 @@ import { ProfilesShader } from "../components/profiles-shader";
       background: rgba(255, 255, 255, 0.05);
       color: rgba(255, 255, 255, 0.8);
       cursor: pointer;
+      transition-property: background-color, color, scale;
+      transition-duration: 150ms;
+      transition-timing-function: ease-out;
+    }
+
+    :global(.portrait-editor-close::before) {
+      content: "";
+      position: absolute;
+      inset: -4px;
+    }
+
+    :global(.portrait-editor-close:active) {
+      scale: 0.96;
     }
 
     :global(.portrait-editor-close-icon) {
@@ -261,6 +356,8 @@ import { ProfilesShader } from "../components/profiles-shader";
       max-height: 92%;
       object-fit: contain;
       border-radius: 4px;
+      outline: 1px solid rgba(255, 255, 255, 0.1);
+      outline-offset: -1px;
     }
 
     :global(.portrait-editor-placeholder) {
@@ -456,6 +553,7 @@ import { ProfilesShader } from "../components/profiles-shader";
 
     :global(.portrait-editor-slider-value) {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-variant-numeric: tabular-nums;
       color: rgba(255, 255, 255, 0.45);
     }
 
@@ -584,6 +682,13 @@ import { ProfilesShader } from "../components/profiles-shader";
       font-size: 13px;
       cursor: pointer;
       white-space: nowrap;
+      transition-property: background-color, color, filter, scale;
+      transition-duration: 150ms;
+      transition-timing-function: ease-out;
+    }
+
+    :global(.portrait-editor-btn:active:not(:disabled)) {
+      scale: 0.96;
     }
 
     :global(.portrait-editor-btn:hover:not(:disabled)) {
@@ -606,10 +711,14 @@ import { ProfilesShader } from "../components/profiles-shader";
       filter: brightness(1.08);
     }
 
-    /* Hide shader dev panel while the portrait studio is open */
+    :global(.portrait-editor-btn-primary:active:not(:disabled)) {
+      filter: brightness(1.08);
+    }
+
+    /* Fade the dev panel out while studio is open — keeps slide/fade exit visible */
     :global(body.portrait-studio-active [data-shader-dev]),
     :global(body.portrait-studio-active .sd-edge-sensor) {
-      visibility: hidden !important;
+      opacity: 0 !important;
       pointer-events: none !important;
     }
   </style>

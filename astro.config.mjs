@@ -15,6 +15,12 @@ export default defineConfig({
     // URL resolution — load it as-is instead.
     optimizeDeps: {
       exclude: ["@huggingface/transformers", "@mediapipe/tasks-vision"],
+      include: [
+        "@react-three/drei",
+        "@react-three/fiber",
+        "three",
+        "shader-panel",
+      ],
     },
     server: {
       fs: {

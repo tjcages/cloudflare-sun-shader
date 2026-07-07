@@ -8,14 +8,15 @@ import {
   BufferGeometry,
   Color,
   DoubleSide,
-  Float32BufferAttribute,
   GLSL3,
-  PlaneGeometry,
-  Quaternion,
   ShaderMaterial,
-  Vector3,
 } from "three"
 import type { ConnectShaderConfig } from "./connect-shader-config"
+import {
+  buildConnectGeometry,
+  connectShapeParams,
+  sampleConnectSurface,
+} from "./connect-shader-geometry"
 import {
   CONNECT_BASE_FRAGMENT,
   CONNECT_EMITTER_FRAGMENT,
@@ -25,42 +26,29 @@ import {
   CONNECT_SHADER_VERTEX,
 } from "./connect-shader-fragment"
 
-// Same cylindrical pre-twist as the Wave page's stripe wave.
-const TWIST_X = 0.35
-const TWIST_Y = 0.35
-const PLANE_W = 25
-/** Default cylinder length (plane height); overridable via config.cylinderLength. */
-const PLANE_H = 100
+const CONNECT_SHAPE_KEYS = [
+  "shapeType",
+  "cylinderLength",
+  "shapeWidth",
+  "twistX",
+  "twistY",
+  "shapeRadius",
+  "shapeConeRadiusStart",
+  "shapeConeRadiusEnd",
+  "shapeTube",
+  "shapeBend",
+  "shapePitch",
+  "shapeAmplitude",
+  "shapeTurns",
+  "shapeWaveFreq",
+  "shapeMeshQuality",
+] as const satisfies ReadonlyArray<keyof ConnectShaderConfig>
+
+function shapeDepsKey(config: ConnectShaderConfig): string {
+  return CONNECT_SHAPE_KEYS.map((key) => String(config[key])).join("|")
+}
 
 type UniformSlot<T> = { value: T }
-
-/**
- * Builds the twisted plane. `length` is the cylinder's axial length (plane
- * height); height-segment count scales with it so quad density — and thus
- * stripe/hatch fidelity — stays constant as the cylinder grows.
- */
-function buildTwistedGeometry(length: number): PlaneGeometry {
-  const hSeg = Math.max(48, Math.min(320, Math.round(length * 0.96)))
-  const geom = new PlaneGeometry(PLANE_W, length, 96, hSeg)
-  const quat = new Quaternion()
-  const up = new Vector3(0, 1, 0)
-  const positionAttr = geom.attributes.position as Float32BufferAttribute
-  const v = new Vector3()
-
-  for (let i = 0; i < positionAttr.count; i += 1) {
-    const px = positionAttr.getX(i)
-    const py = positionAttr.getY(i)
-    const pz = positionAttr.getZ(i)
-    v.set(px, py, pz)
-    quat.setFromAxisAngle(up, (Math.PI / 180) * (py / TWIST_Y + px / TWIST_X))
-    v.applyQuaternion(quat)
-    positionAttr.setXYZ(i, v.x, v.y, v.z)
-  }
-
-  geom.computeVertexNormals()
-  positionAttr.needsUpdate = true
-  return geom
-}
 
 export type ConnectMeshProps = {
   config: ConnectShaderConfig
@@ -73,9 +61,12 @@ export function ConnectMesh({ config, position, rotation }: ConnectMeshProps) {
   speedRef.current = config.speed
   const animTimeRef = useRef(0)
 
+  const shapeKey = shapeDepsKey(config)
+
   const geometry = useMemo(
-    () => buildTwistedGeometry(config.cylinderLength),
-    [config.cylinderLength],
+    () => buildConnectGeometry(connectShapeParams(config)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on shape fields only
+    [shapeKey],
   )
   useEffect(() => {
     return () => geometry.dispose()
@@ -91,7 +82,7 @@ export function ConnectMesh({ config, position, rotation }: ConnectMeshProps) {
       uSpeedX: { value: config.speedX },
       uSpeedY: { value: config.speedY },
       uDisplacementHeight: { value: config.displacementHeight },
-      uPlaneW: { value: PLANE_W },
+      uPlaneW: { value: config.shapeWidth },
       uPlaneH: { value: config.cylinderLength },
       uFillColor: { value: new Color(config.fillColor) },
       uFillColor2: { value: new Color(config.fillColor2) },
@@ -181,6 +172,7 @@ export function ConnectMesh({ config, position, rotation }: ConnectMeshProps) {
 
   // Mutate uniform slots in-place so the GPU sees new values without recompile.
   useEffect(() => {
+    shared.uPlaneW.value = config.shapeWidth
     shared.uPlaneH.value = config.cylinderLength
     shared.uWavesX.value = config.wavesX
     shared.uWavesY.value = config.wavesY
@@ -258,38 +250,24 @@ export function ConnectEmitter({ config }: { config: ConnectShaderConfig }) {
   // Seed the particles across the same-length twisted surface; rebuild when
   // the cylinder length or the particle count changes so they stay glued to
   // the mesh.
-  const cylinderLength = config.cylinderLength
+  const shapeKey = shapeDepsKey(config)
   const count = Math.max(1, Math.round(config.emitCount))
   const geometry = useMemo(() => {
+    const shapeParams = connectShapeParams(config)
     const positions = new Float32Array(count * 3)
     const normals = new Float32Array(count * 3)
     const tangents = new Float32Array(count * 3)
     const uvs = new Float32Array(count * 2)
     const rand = new Float32Array(count * 3)
-    const quat = new Quaternion()
-    const up = new Vector3(0, 1, 0)
-    const v = new Vector3()
-    const nv = new Vector3()
-    const tv = new Vector3()
 
     for (let i = 0; i < count; i += 1) {
       const u = Math.random()
       const w = Math.random()
-      const px = (u - 0.5) * PLANE_W
-      const py = (w - 0.5) * cylinderLength
-      // Same cylindrical pre-twist as the mesh, so particles sit exactly on it.
-      quat.setFromAxisAngle(
-        up,
-        (Math.PI / 180) * (py / TWIST_Y + px / TWIST_X),
-      )
-      v.set(px, py, 0).applyQuaternion(quat)
-      nv.set(0, 0, 1).applyQuaternion(quat)
-      // Tangent along the plane's length — the hatch dash direction.
-      tv.set(0, 1, 0).applyQuaternion(quat)
-      positions.set([v.x, v.y, v.z], i * 3)
-      normals.set([nv.x, nv.y, nv.z], i * 3)
-      tangents.set([tv.x, tv.y, tv.z], i * 3)
-      uvs.set([u, w], i * 2)
+      const sample = sampleConnectSurface(shapeParams, u, w)
+      positions.set(sample.position.toArray(), i * 3)
+      normals.set(sample.normal.toArray(), i * 3)
+      tangents.set(sample.tangent.toArray(), i * 3)
+      uvs.set(sample.uv, i * 2)
       rand.set([Math.random(), Math.random(), Math.random()], i * 3)
     }
 
@@ -300,7 +278,8 @@ export function ConnectEmitter({ config }: { config: ConnectShaderConfig }) {
     geom.setAttribute("uv", new BufferAttribute(uvs, 2))
     geom.setAttribute("aRand", new BufferAttribute(rand, 3))
     return geom
-  }, [cylinderLength, count])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on shape fields + count
+  }, [shapeKey, count])
 
   useEffect(() => {
     return () => geometry.dispose()

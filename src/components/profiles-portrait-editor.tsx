@@ -17,6 +17,8 @@ import {
 } from "./profiles-portrait-types"
 import type { PortraitFaceAnalysis } from "./profiles-portrait-types"
 
+export const PORTRAIT_EDITOR_EXIT_MS = 220
+
 export type PortraitEditorProps = {
   /** Object URL or asset path of the raw uploaded image. */
   sourceUrl: string
@@ -371,12 +373,36 @@ export function PortraitEditor({
     }
   }, [revokePreview, revokeAiBase])
 
-  if (!open) return null
+  const STUDIO_EXIT_MS = PORTRAIT_EDITOR_EXIT_MS
+  const [present, setPresent] = useState(open)
+  const [active, setActive] = useState(false)
+
+  useEffect(() => {
+    if (open) {
+      setPresent(true)
+      const frame = requestAnimationFrame(() => {
+        requestAnimationFrame(() => setActive(true))
+      })
+      return () => cancelAnimationFrame(frame)
+    }
+
+    setActive(false)
+    const timeout = window.setTimeout(() => setPresent(false), STUDIO_EXIT_MS)
+    return () => window.clearTimeout(timeout)
+  }, [open])
+
+  if (!present) return null
 
   const faceDetected = (faceAnalysis?.confidence ?? 0) > 0
 
   return (
-    <div className="portrait-editor-backdrop" role="presentation">
+    <div
+      className={cn(
+        "portrait-editor-backdrop",
+        active && "is-active",
+      )}
+      role="presentation"
+    >
       <div
         className="portrait-editor"
         role="dialog"

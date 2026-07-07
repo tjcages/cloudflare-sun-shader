@@ -9,7 +9,7 @@ import { ConnectShader } from "../components/connect-shader";
   <main class="connect-stage">
     <ConnectShader client:only="react" className="shader-fullscreen" />
   </main>
-  {/* No <ShaderDevRoot/> — useShaderDev injects the panel itself. */}
+  {/* useShaderDev auto-mounts ShaderDevRoot — no duplicate root here. */}
 
   <style>
     .connect-stage {

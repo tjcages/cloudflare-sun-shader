@@ -14,15 +14,20 @@
  *   3. Glow — additive atmospheric haze, biased toward far pixels, which
  *      tints the background the way a colored studio light spills.
  *
- * Color model: lighting runs in linear space (sRGB textures and panel hex
- * colors are linearized on read). ACES filmic tone mapping rolls off stacked
- * lights without hard-clipping highlights. Output is encoded to sRGB once at
- * the end — the custom ShaderMaterial bypasses three.js color chunks, so the
- * renderer does not double-encode.
+ * Color model: `uTint` grades the ambient between pure white (0 — the photo
+ * keeps its natural colors and lights are purely additive accents) and the
+ * ambient color (1 — the fully re-graded look). The tone map is identity
+ * below a 0.8 knee and soft-compresses highlights above it, so at tint 0 /
+ * exposure 1 the untouched parts of the photo pass through unchanged.
+ *
+ * Textures are stored as sRGB (`LinearSRGBColorSpace`) and sampled without
+ * GPU decode; the shader works in display space so an unlit photo matches the
+ * source image. Colored lights are linearized only for their additive energy.
  *
  * Extras: pointer parallax displaces UVs by depth (foreground only — the
  * background stays pinned so the image doesn't read as two sliding layers),
- * a scan band that sweeps through *depth*, and procedural overlay systems
+ * a scan band that sweeps through *depth*, a vertical photo→lit-depth splice,
+ * and procedural overlay systems
  * (ASCII glyphs / cross-hatching / pixel LED / halftone dots) that draw over
  * the lit image, optionally masked to the near-depth subject.
  *
@@ -82,30 +87,14 @@ export const PROFILES_SHADER_FRAGMENT = /* glsl */ `
   uniform float uOverlayDepthMin;
   uniform float uOverlayScanOnly;
 
+  uniform float uDepthSpliceEnabled;
+  uniform float uDepthSplicePosition;
+  uniform float uDepthSpliceSoftness;
+
   in vec2 vUv;
   out vec4 fragColor;
 
   const vec3 LUMA = vec3(0.299, 0.587, 0.114);
-
-  // --- Color space (linear working space; encode once at output) -----------
-  vec3 srgbToLinear(vec3 c) {
-    bvec3 lo = lessThanEqual(c, vec3(0.04045));
-    return mix(
-      pow((c + vec3(0.055)) / vec3(1.055), vec3(2.4)),
-      c / vec3(12.92),
-      vec3(lo)
-    );
-  }
-
-  vec3 linearToSrgb(vec3 c) {
-    c = max(c, vec3(0.0));
-    bvec3 hi = greaterThan(c, vec3(0.0031308));
-    return mix(
-      c * vec3(12.92),
-      vec3(1.055) * pow(c, vec3(1.0 / 2.4)) - vec3(0.055),
-      vec3(hi)
-    );
-  }
 
   // Dave Hoskins-style hash — stable across GPUs, no sin banding.
   float hash21(vec2 p) {
@@ -121,25 +110,15 @@ export const PROFILES_SHADER_FRAGMENT = /* glsl */ `
     return c + vec3(n / 255.0);
   }
 
-  // ACES filmic (Narkowicz fit) — hue-preserving highlight rolloff.
+  // Identity below the knee, soft-compressed above — photo pass-through at
+  // exposure 1 while stacked lights roll off instead of clipping to white.
   vec3 toneMap(vec3 c) {
-    c = max(c, vec3(0.0));
-    const float a = 2.51;
-    const float b = 0.03;
-    const float c1 = 2.43;
-    const float d = 0.59;
-    const float e = 0.14;
-    return clamp(
-      (c * (a * c + b)) / (c * (c1 * c + d) + e),
-      0.0,
-      1.0
-    );
+    const float knee = 0.8;
+    vec3 lo = min(c, vec3(knee));
+    vec3 hi = max(c - knee, vec3(0.0));
+    return lo + (1.0 - knee) * (1.0 - exp(-hi / (1.0 - knee)));
   }
 
-  // C2-continuous easing for scan / reveal curves.
-  float smootherstep(float t) {
-    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
-  }
 
   // 5x5 bit-packed glyph coverage. p in [-1, 1] cell space.
   float glyphBit(int n, vec2 p) {
@@ -209,7 +188,7 @@ export const PROFILES_SHADER_FRAGMENT = /* glsl */ `
         11512810
       );
       float g = glyphBit(glyphs[int(cLum * 8.99)], cellUv * 2.0 - 1.0);
-      vec3 ink = mix(srgbToLinear(uOverlayColor), col * 1.7, uOverlayUseImage);
+      vec3 ink = mix(uOverlayColor, col * 1.7, uOverlayUseImage);
       return mix(col, ink * g, strength);
     }
 
@@ -237,7 +216,7 @@ export const PROFILES_SHADER_FRAGMENT = /* glsl */ `
         hatchLine((q.x - q.y) * density * 0.7071, aa) *
           smoothstep(0.25, 0.1, l)
       );
-      vec3 inkCol = mix(srgbToLinear(uOverlayColor), col * 1.5, uOverlayUseImage);
+      vec3 inkCol = mix(uOverlayColor, col * 1.5, uOverlayUseImage);
       return mix(col, inkCol, ink * strength);
     }
 
@@ -262,7 +241,7 @@ export const PROFILES_SHADER_FRAGMENT = /* glsl */ `
     float d = length(cellUv - 0.5);
     float aa = fwidth(d) * 1.5;
     float dotMark = smoothstep(radius + aa, radius - aa, d);
-    vec3 ink = mix(srgbToLinear(uOverlayColor), cCol * 1.6, uOverlayUseImage);
+    vec3 ink = mix(uOverlayColor, cCol * 1.6, uOverlayUseImage);
     return mix(col, ink, dotMark * strength);
   }
 
@@ -301,7 +280,7 @@ export const PROFILES_SHADER_FRAGMENT = /* glsl */ `
     );
 
     float depth = texture(uDepth, uv).r;
-    // sRGB JPEG/PNG — GPU decodes to linear on sample (Three.js SRGBColorSpace).
+    // sRGB photo — sampled as display values (see LinearSRGBColorSpace on upload).
     vec3 albedo = texture(uImage, uv).rgb;
 
     // Surface normal from depth gradients (3-texel offsets smooth the noise
@@ -321,7 +300,7 @@ export const PROFILES_SHADER_FRAGMENT = /* glsl */ `
     // Tint 0 = neutral white ambient (photo keeps its own colors, lights are
     // additive accents). Tint 1 = fully re-graded by the ambient color.
     vec3 lightSum =
-      mix(vec3(1.0), srgbToLinear(uAmbientColor), uTint) * uAmbientIntensity;
+      mix(vec3(1.0), uAmbientColor, uTint) * uAmbientIntensity;
     vec3 glowSum = vec3(0.0);
 
     for (int i = 0; i < 3; i++) {
@@ -338,15 +317,13 @@ export const PROFILES_SHADER_FRAGMENT = /* glsl */ `
       float diff = max(dot(normal, normalize(toL)), 0.0);
       float shade = mix(1.0, diff, uLightDiffuse[i]);
 
-      lightSum +=
-        srgbToLinear(uLightColor[i]) * (uLightIntensity[i] * atten * shade);
+      lightSum += uLightColor[i] * (uLightIntensity[i] * atten * shade);
 
       // Atmospheric spill — additive, strongest on far (background) pixels.
       float r2 = max(uLightRadius[i] * uLightRadius[i], 1e-4);
       float glowFall = exp(-dist * dist * (2.5 / r2));
       glowSum +=
-        srgbToLinear(uLightColor[i]) *
-        (uLightGlow[i] * glowFall * (1.0 - depth * 0.75));
+        uLightColor[i] * (uLightGlow[i] * glowFall * (1.0 - depth * 0.75));
     }
 
     vec3 col = albedo * lightSum + glowSum;
@@ -366,32 +343,45 @@ export const PROFILES_SHADER_FRAGMENT = /* glsl */ `
     // instead of parked in the off-content margin.
     float off = (dir == 0) ? 0.25 : 0.5;
     float phase = fract(uTime * uScanSpeed + off);
-    float eased = smootherstep(phase);
     float t;
     if (dir == 0) {
-      // Ping-pong: back -> front -> back (velocity-continuous turnaround).
-      float tri = 1.0 - abs(1.0 - 2.0 * eased);
+      // Ping-pong: back -> front -> back.
+      float tri = 1.0 - abs(1.0 - 2.0 * phase);
       t = mix(lo, hi, tri);
     } else if (dir == 1) {
       // One-way loop, back -> front. Wrap happens off-content (in the margin)
       // so the reset is invisible.
-      t = mix(lo, hi, eased);
+      t = mix(lo, hi, phase);
     } else {
       // One-way loop, front -> back.
-      t = mix(hi, lo, eased);
+      t = mix(hi, lo, phase);
     }
-    float bandDist = abs(depth - t);
-    float bandW = max(fwidth(bandDist) * 1.5, 1e-4);
-    float band = 1.0 - smoothstep(uScanWidth + bandW, uScanWidth - bandW, bandDist);
+    float band = 1.0 - smoothstep(0.0, uScanWidth, abs(depth - t));
 
     if (uScanEnabled > 0.5) {
-      col += srgbToLinear(uScanColor) *
-        (band * uScanIntensity * (0.35 + 0.65 * albedo));
+      col += uScanColor * (band * uScanIntensity * (0.35 + 0.65 * albedo));
     }
 
     col = toneMap(col * uExposure);
 
     col = applyOverlay(col, uv, depth, lightSum, glowSum, band);
+
+    // Vertical splice: lit photo above, depth-map luminance below (same lights).
+    if (uDepthSpliceEnabled > 0.5) {
+      vec3 depthAlbedo = vec3(pow(depth, 0.82));
+      vec3 depthLit = depthAlbedo * lightSum + glowSum;
+      if (uScanEnabled > 0.5) {
+        depthLit += uScanColor * (band * uScanIntensity * (0.35 + 0.65 * depthAlbedo));
+      }
+      depthLit = toneMap(depthLit * uExposure);
+      float halfSoft = max(uDepthSpliceSoftness * 0.5, 1e-4);
+      float photoMix = smoothstep(
+        uDepthSplicePosition - halfSoft,
+        uDepthSplicePosition + halfSoft,
+        uv.y
+      );
+      col = mix(depthLit, col, photoMix);
+    }
 
     // Light-position helper rings (dev aid, toggled from the panel).
     if (uShowHelpers > 0.5) {
@@ -401,13 +391,12 @@ export const PROFILES_SHADER_FRAGMENT = /* glsl */ `
         float dPix = length((vUv - lpUv) * vec2(uAspect, 1.0));
         float pixW = max(fwidth(dPix), 1e-4);
         float ring = smoothstep(0.012 + pixW, 0.009 - pixW, abs(dPix - 0.022));
-        col = mix(col, srgbToLinear(uLightColor[i]), ring * 0.9);
+        col = mix(col, uLightColor[i], ring * 0.9);
         float dotMark = smoothstep(0.008 + pixW, 0.005 - pixW, dPix);
         col = mix(col, vec3(1.0), dotMark);
       }
     }
 
-    col = linearToSrgb(col);
     col = ditherTPDF(gl_FragCoord.xy, col);
     fragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
   }

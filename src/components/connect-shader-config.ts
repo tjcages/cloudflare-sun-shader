@@ -1,5 +1,28 @@
 export type ConnectShaderConfig = {
   speed: number
+  shapeType:
+    | "spiral"
+    | "plane"
+    | "helix"
+    | "ribbon"
+    | "torus"
+    | "mobius"
+    | "saddle"
+    | "waveSheet"
+    | "cone"
+    | "disc"
+  shapeWidth: number
+  twistX: number
+  twistY: number
+  shapeRadius: number
+  shapeConeRadiusStart: number
+  shapeConeRadiusEnd: number
+  shapeTube: number
+  shapeBend: number
+  shapePitch: number
+  shapeAmplitude: number
+  shapeTurns: number
+  shapeWaveFreq: number
   cylinderLength: number
   wavesX: number
   wavesY: number
@@ -54,12 +77,57 @@ export type ConnectShaderConfig = {
   cameraZ: number
   cameraY: number
   cameraFov: number
+  renderDpr: number
+  shapeMeshQuality: number
+  renderAntialias: boolean
+  postEnabled: boolean
+  postPreset:
+    | "off"
+    | "soft"
+    | "cinematic"
+    | "dreamy"
+    | "punchy"
+    | "bloom"
+    | "retro"
+    | "flare"
+    | "custom"
+  postBlur: number
+  postBokeh: number
+  postBokehThreshold: number
+  postChroma: number
+  postVignette: number
+  postGrain: number
+  postContrast: number
+  postSaturation: number
+  postExposure: number
+  postSharpness: number
+  postWarmth: number
+  postProgBlur: number
+  postProgFocus: number
+  postFlare: number
+  postFlareSpread: number
+  postFlareThreshold: number
+  postFlareX: number
+  postFlareY: number
 }
 
 // @shader-config-start
 export const CONNECT_SHADER_DEFAULTS = {
-  speed: 1,
-  cylinderLength: 100,
+  speed: 0.75,
+  shapeType: "spiral",
+  shapeWidth: 25,
+  twistX: 0.35,
+  twistY: 0.35,
+  shapeRadius: 10,
+  shapeConeRadiusStart: 14,
+  shapeConeRadiusEnd: 0.75,
+  shapeTube: 3.5,
+  shapeBend: 8,
+  shapePitch: 28,
+  shapeAmplitude: 6,
+  shapeTurns: 1,
+  shapeWaveFreq: 2,
+  cylinderLength: 208,
   wavesX: 3,
   wavesY: 3,
   displacementHeight: 3.4,
@@ -67,10 +135,10 @@ export const CONNECT_SHADER_DEFAULTS = {
   speedY: 0.13,
   fillColor: "#FF7A1F",
   fillColor2: "#FFAF36",
-  fillGradScale: 1.6,
+  fillGradScale: 0.2,
   fillAlpha: 0.9,
-  fillLow: 0.38,
-  fillHigh: 0.82,
+  fillLow: 0.04,
+  fillHigh: 0.78,
   fillRadius: 1,
   lineColor: "#E8481C",
   lineCount: 180,
@@ -81,24 +149,24 @@ export const CONNECT_SHADER_DEFAULTS = {
   hatchAngle: 90,
   hatchLift: 1.4,
   hatchSpacing: 0.22,
-  hatchCell: 2.6,
-  hatchFill: 0.8,
+  hatchCell: 0.85,
+  hatchFill: 0.22,
   dashMin: 0.15,
   dashMax: 0.95,
-  hatchDensity: 2.1,
+  hatchDensity: 8,
   densityFloor: 0.12,
   hatchDrift: 7,
   waveGate: 0.55,
   envCenter: 0.7,
   envSlope: 0.35,
   envWidth: 0.2,
-  emitCount: 9000,
-  emitAmount: 0.7,
+  emitCount: 12000,
+  emitAmount: 0.81,
   emitSpeed: 0.65,
   emitDist: 8,
-  emitFall: 9,
-  emitSize: 1.4,
-  emitStretch: 6.5,
+  emitFall: 16,
+  emitSize: 1,
+  emitStretch: 13.9,
   emitAlpha: 0.95,
   emitPaleColor: "#FFE3D1",
   emitSalmonColor: "#FFB98C",
@@ -113,5 +181,28 @@ export const CONNECT_SHADER_DEFAULTS = {
   cameraZ: 18,
   cameraY: 4,
   cameraFov: 55,
+  renderDpr: 1.75,
+  shapeMeshQuality: 1,
+  renderAntialias: true,
+  postEnabled: true,
+  postPreset: "off",
+  postBlur: 0.86,
+  postBokeh: 0.44,
+  postBokehThreshold: 0.2,
+  postChroma: 0,
+  postVignette: 0,
+  postGrain: 0,
+  postContrast: 1.06,
+  postSaturation: 1.32,
+  postExposure: 1.13,
+  postSharpness: 0.46,
+  postWarmth: 1,
+  postProgBlur: 0.33,
+  postProgFocus: 0,
+  postFlare: 0.05,
+  postFlareSpread: 0.5,
+  postFlareThreshold: 0.72,
+  postFlareX: 0.58,
+  postFlareY: 0.42,
 } as const
 // @shader-config-end

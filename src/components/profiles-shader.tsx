@@ -1,7 +1,8 @@
 "use client"
 
 import { Canvas } from "@react-three/fiber"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { LinearSRGBColorSpace, NoToneMapping } from "three"
 import {
   readShaderDevOpenFlag,
   SHADER_DEV_TOGGLE_EVENT,
@@ -10,7 +11,7 @@ import {
 } from "shader-panel"
 import { cn } from "../lib/utils"
 import { generateDepthMap } from "./profiles-depth"
-import { PortraitEditor } from "./profiles-portrait-editor"
+import { PortraitEditor, PORTRAIT_EDITOR_EXIT_MS } from "./profiles-portrait-editor"
 import {
   portraitSettingsFromConfig,
   portraitSettingsToConfig,
@@ -49,11 +50,26 @@ export function ProfilesShader({ className }: ProfilesShaderProps) {
     useState<PortraitStyleSettings | null>(null)
   const openEditorRef = useRef<() => void>(() => {})
 
+  const configRef = useRef<ProfilesShaderConfig>(PROFILES_SHADER_DEFAULTS)
+
   const openPortraitEditor = useCallback((src: string) => {
     setEditorSettings(portraitSettingsFromConfig(configRef.current))
     setEditorSource(src)
     setEditorOpen(true)
   }, [])
+
+  openEditorRef.current = () => {
+    const src = configRef.current.imageSrc
+    if (!src) return
+    openPortraitEditor(src)
+  }
+
+  const actionHandlers = useMemo(
+    () => ({
+      openPortraitEditor: () => openEditorRef.current(),
+    }),
+    [],
+  )
 
   const [config, setConfig] = useShaderDev<ProfilesShaderConfig>({
     id: "profiles-relight",
@@ -62,28 +78,35 @@ export function ProfilesShader({ className }: ProfilesShaderProps) {
     fields: PROFILES_SHADER_DEV_FIELDS,
     defaultTheme: "dark",
     defaultOpen: true,
-    actionHandlers: {
-      openPortraitEditor: () => openEditorRef.current(),
-    },
+    actionHandlers,
   })
 
-  const configRef = useRef(config)
   configRef.current = config
-
-  openEditorRef.current = () => {
-    const src = configRef.current.imageSrc
-    if (!src || src === PROFILES_SHADER_DEFAULTS.imageSrc) return
-    openPortraitEditor(src)
-  }
 
   const [status, setStatus] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const editorAppliedRef = useRef(false)
   const devPanelWasOpenRef = useRef(false)
+  const editorTeardownRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const teardownEditor = useCallback(() => {
+    if (editorTeardownRef.current) {
+      clearTimeout(editorTeardownRef.current)
+    }
+    setEditorOpen(false)
+    editorTeardownRef.current = setTimeout(() => {
+      setEditorSource(null)
+      setEditorSettings(null)
+      editorTeardownRef.current = null
+    }, PORTRAIT_EDITOR_EXIT_MS)
+  }, [])
+
+  const studioVisible =
+    editorOpen && editorSource !== null && editorSettings !== null
 
   // Studio and dev panel are mutually exclusive — restore panel state on close.
   useEffect(() => {
-    if (editorOpen) {
+    if (studioVisible) {
       devPanelWasOpenRef.current = readShaderDevOpenFlag()
       if (devPanelWasOpenRef.current) {
         setShaderDevPanelOpen(false)
@@ -99,7 +122,16 @@ export function ProfilesShader({ className }: ProfilesShaderProps) {
       setShaderDevPanelOpen(true)
       devPanelWasOpenRef.current = false
     }
-  }, [editorOpen])
+  }, [studioVisible])
+
+  useEffect(() => {
+    return () => {
+      document.body.classList.remove("portrait-studio-active")
+      if (editorTeardownRef.current) {
+        clearTimeout(editorTeardownRef.current)
+      }
+    }
+  }, [])
 
   // Optional: open the AI portrait studio after a panel upload.
   useEffect(() => {
@@ -170,6 +202,33 @@ export function ProfilesShader({ className }: ProfilesShaderProps) {
       })
   }, [config.imageSrc, setConfig])
 
+  // Strip waypoints that sit on the home anchor whenever a light home moves
+  // (canvas drag or path-pad anchor drag).
+  useEffect(() => {
+    const c = configRef.current
+    const updates: Partial<ProfilesShaderConfig> = {}
+    let dirty = false
+
+    for (const n of [1, 2, 3] as const) {
+      const posKey = `light${n}Pos` as const
+      const pathKey = `light${n}Path` as const
+      const stripped = stripAnchorDuplicateWaypoints(c[posKey], c[pathKey])
+      if (stripped.length !== c[pathKey].length) {
+        updates[pathKey] = stripped
+        dirty = true
+      }
+    }
+
+    if (dirty) {
+      setConfig({ ...c, ...updates })
+    }
+  }, [
+    config.light1Pos,
+    config.light2Pos,
+    config.light3Pos,
+    setConfig,
+  ])
+
   const handleLightPosChange = useCallback(
     (lightIndex: number, pos: readonly [number, number]) => {
       const n = lightIndex + 1
@@ -223,9 +282,7 @@ export function ProfilesShader({ className }: ProfilesShaderProps) {
           imageSrc: ownedUrl,
           ...portraitSettingsToConfig(settings),
         })
-        setEditorOpen(false)
-        setEditorSource(null)
-        setEditorSettings(null)
+        teardownEditor()
       } catch (err) {
         editorAppliedRef.current = false
         setStatus(
@@ -233,7 +290,7 @@ export function ProfilesShader({ className }: ProfilesShaderProps) {
         )
       }
     },
-    [setConfig],
+    [setConfig, teardownEditor],
   )
 
   const handleEditorSkip = useCallback(
@@ -249,9 +306,7 @@ export function ProfilesShader({ className }: ProfilesShaderProps) {
             imageSrc: ownedUrl,
           })
         }
-        setEditorOpen(false)
-        setEditorSource(null)
-        setEditorSettings(null)
+        teardownEditor()
       } catch (err) {
         editorAppliedRef.current = false
         setStatus(
@@ -259,7 +314,7 @@ export function ProfilesShader({ className }: ProfilesShaderProps) {
         )
       }
     },
-    [setConfig],
+    [setConfig, teardownEditor],
   )
 
   const handleEditorClose = useCallback(() => {
@@ -269,10 +324,8 @@ export function ProfilesShader({ className }: ProfilesShaderProps) {
     ) {
       URL.revokeObjectURL(editorSource)
     }
-    setEditorOpen(false)
-    setEditorSource(null)
-    setEditorSettings(null)
-  }, [editorSource])
+    teardownEditor()
+  }, [editorSource, teardownEditor])
 
   return (
     <div
@@ -295,6 +348,11 @@ export function ProfilesShader({ className }: ProfilesShaderProps) {
         dpr={[1, 2]}
         camera={{ position: [0, 0, 5], fov: 50 }}
         gl={{ antialias: true, alpha: false }}
+        onCreated={({ gl }) => {
+          // Shader outputs display/sRGB values — skip renderer output encode.
+          gl.outputColorSpace = LinearSRGBColorSpace
+          gl.toneMapping = NoToneMapping
+        }}
         style={{ width: "100%", height: "100%" }}
       >
         <color attach="background" args={["#050507"]} />

@@ -2,6 +2,17 @@ export type PathPoint = readonly [number, number]
 
 type LightLoopMode = "forward" | "pingpong"
 
+/**
+ * Quintic ease-in-out — strong dwell at endpoints, punchy mid-leg motion.
+ * Used for every animated leg so lights never move linearly between waypoints.
+ */
+export function dramaticEaseInOut(t: number): number {
+  const x = Math.max(0, Math.min(1, t))
+  if (x < 0.5) return 16 * x * x * x * x * x
+  const u = -2 * x + 2
+  return 1 - 0.5 * u * u * u * u * u
+}
+
 function segmentLength(a: PathPoint, b: PathPoint): number {
   return Math.hypot(b[0] - a[0], b[1] - a[1])
 }
@@ -28,7 +39,8 @@ function samplePolyline(
   for (let i = 0; i < points.length - 1; i++) {
     const seg = segmentLength(points[i], points[i + 1])
     if (d <= seg) {
-      const t = seg > 0 ? d / seg : 0
+      const linearT = seg > 0 ? d / seg : 0
+      const t = dramaticEaseInOut(linearT)
       return [
         points[i][0] + (points[i + 1][0] - points[i][0]) * t,
         points[i][1] + (points[i + 1][1] - points[i][1]) * t,

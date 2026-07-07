@@ -3,6 +3,7 @@
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
+  LinearSRGBColorSpace,
   ClampToEdgeWrapping,
   Color,
   DataTexture,
@@ -59,6 +60,9 @@ type ProfilesUniforms = {
   uOverlaySpeed: { value: number }
   uOverlayDepthMin: { value: number }
   uOverlayScanOnly: { value: number }
+  uDepthSpliceEnabled: { value: number }
+  uDepthSplicePosition: { value: number }
+  uDepthSpliceSoftness: { value: number }
 }
 
 const OVERLAY_MODE_INDEX: Record<string, number> = {
@@ -83,10 +87,12 @@ function flatTexture(r: number, g: number, b: number): DataTexture {
     RGBAFormat,
   )
   tex.needsUpdate = true
+  configureTexture(tex)
   return tex
 }
 
 function configureTexture(tex: Texture): void {
+  tex.colorSpace = LinearSRGBColorSpace
   tex.minFilter = LinearFilter
   tex.magFilter = LinearFilter
   tex.wrapS = ClampToEdgeWrapping
@@ -195,6 +201,9 @@ export function ProfilesMesh({ config, onLightPosChange }: ProfilesMeshProps) {
       uOverlaySpeed: { value: config.overlaySpeed },
       uOverlayDepthMin: { value: config.overlayDepthMin },
       uOverlayScanOnly: { value: config.overlayScanOnly ? 1 : 0 },
+      uDepthSpliceEnabled: { value: config.depthSpliceEnabled ? 1 : 0 },
+      uDepthSplicePosition: { value: config.depthSplicePosition },
+      uDepthSpliceSoftness: { value: config.depthSpliceSoftness },
     }),
     // Build once — `.value` slots are mutated below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -289,6 +298,9 @@ export function ProfilesMesh({ config, onLightPosChange }: ProfilesMeshProps) {
     uniforms.uOverlaySpeed.value = config.overlaySpeed
     uniforms.uOverlayDepthMin.value = config.overlayDepthMin
     uniforms.uOverlayScanOnly.value = config.overlayScanOnly ? 1 : 0
+    uniforms.uDepthSpliceEnabled.value = config.depthSpliceEnabled ? 1 : 0
+    uniforms.uDepthSplicePosition.value = config.depthSplicePosition
+    uniforms.uDepthSpliceSoftness.value = config.depthSpliceSoftness
   }, [config, uniforms])
 
   const dragLightRef = useRef<number | null>(null)
@@ -299,6 +311,9 @@ export function ProfilesMesh({ config, onLightPosChange }: ProfilesMeshProps) {
   useFrame((state, delta) => {
     const { time } = advanceShaderDevAnimationDelta(animTimeRef.current)
     animTimeRef.current = time
+    // Scan band marches on wall-clock delta (original behaviour). The dev-panel
+    // animation clock only drives light-path waypoints — coupling uTime to it
+    // made the band jump or run backward on reset/step.
     uniforms.uTime.value += delta
     uniforms.uPointer.value.lerp(state.pointer, 0.06)
 

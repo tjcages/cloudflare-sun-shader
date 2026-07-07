@@ -1,5 +1,12 @@
 ---
-type Current = "sun" | "sun-v2" | "waterfall" | "wave" | "combo";
+type Current =
+  | "sun"
+  | "sun-v2"
+  | "waterfall"
+  | "wave"
+  | "combo"
+  | "connect"
+  | "profiles";
 interface Props {
   current: Current;
 }
@@ -11,6 +18,8 @@ const links: { id: Current; label: string; href: string }[] = [
   { id: "waterfall", label: "Waterfall", href: "/waterfall" },
   { id: "wave", label: "Wave", href: "/wave" },
   { id: "combo", label: "Combo", href: "/combo" },
+  { id: "connect", label: "Connect", href: "/connect" },
+  { id: "profiles", label: "Profiles", href: "/profiles" },
 ];
 ---
 

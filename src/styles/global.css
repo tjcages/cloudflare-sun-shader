@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* Tailwind v4 only scans the consumer project by default — tell it to walk the
-   linked shader-dev package too so its class names get emitted. */
+   linked shader-panel package too so its class names get emitted. */
 @source "../../node_modules/shader-panel";
 
 @theme {

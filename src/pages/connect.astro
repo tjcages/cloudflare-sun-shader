@@ -1,0 +1,30 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Nav from "../components/Nav.astro";
+import { ConnectShader } from "../components/connect-shader";
+---
+
+<Layout title="Connect Shader">
+  <Nav current="connect" />
+  <main class="connect-stage">
+    <ConnectShader client:only="react" className="shader-fullscreen" />
+  </main>
+  {/* No <ShaderDevRoot/> — useShaderDev injects the panel itself. */}
+
+  <style>
+    .connect-stage {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100dvh;
+      background: #ffffff;
+      overflow: hidden;
+      isolation: isolate;
+    }
+
+    :global(.shader-fullscreen) {
+      position: absolute !important;
+      inset: 0 !important;
+    }
+  </style>
+</Layout>

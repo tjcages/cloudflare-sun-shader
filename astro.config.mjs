@@ -6,16 +6,25 @@ export default defineConfig({
   integrations: [react()],
   vite: {
     plugins: [tailwindcss()],
-    // Linked TS source package — let Vite transform it instead of pre-bundling.
-    optimizeDeps: {
-      exclude: ["@tjcages/shader-dev"],
+    // wrangler preview serves the production build — keep the full dev panel
+    // instead of shader-panel's production no-op stub.
+    resolve: {
+      conditions: ["development", "import", "module", "browser", "default"],
     },
-    ssr: {
-      noExternal: ["@tjcages/shader-dev"],
+    // Vite's dep pre-bundling breaks transformers.js's runtime worker/wasm
+    // URL resolution — load it as-is instead.
+    optimizeDeps: {
+      exclude: ["@huggingface/transformers", "@mediapipe/tasks-vision"],
     },
     server: {
       fs: {
-        allow: ["..", "/Users/ty/Desktop/shader-dev"],
+        allow: ["..", "/Users/ty/Workspace/shader-panel"],
+      },
+      proxy: {
+        "/api": {
+          target: "http://127.0.0.1:8787",
+          changeOrigin: true,
+        },
       },
     },
   },

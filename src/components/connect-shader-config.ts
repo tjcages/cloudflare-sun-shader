@@ -113,7 +113,7 @@ export type ConnectShaderConfig = {
 
 // @shader-config-start
 export const CONNECT_SHADER_DEFAULTS = {
-  speed: 0.75,
+  speed: 0.15,
   shapeType: "spiral",
   shapeWidth: 25,
   twistX: 0.35,
@@ -141,7 +141,7 @@ export const CONNECT_SHADER_DEFAULTS = {
   fillHigh: 0.78,
   fillRadius: 1,
   lineColor: "#E8481C",
-  lineCount: 180,
+  lineCount: 1186,
   lineWidth: 1,
   lineAlpha: 0.8,
   lineFadeLow: 0.35,
@@ -154,8 +154,8 @@ export const CONNECT_SHADER_DEFAULTS = {
   dashMin: 0.15,
   dashMax: 0.95,
   hatchDensity: 8,
-  densityFloor: 0.12,
-  hatchDrift: 7,
+  densityFloor: 1,
+  hatchDrift: 40,
   waveGate: 0.55,
   envCenter: 0.7,
   envSlope: 0.35,

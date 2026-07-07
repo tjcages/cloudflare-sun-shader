@@ -23,7 +23,7 @@ interface ConnectShaderProps {
 
 export function ConnectShader({ className }: ConnectShaderProps) {
   const [config] = useShaderDev<ConnectShaderConfig>({
-    id: "connect-v6",
+    id: "connect-v7",
     title: "Connect shader",
     defaults: CONNECT_SHADER_DEFAULTS,
     fields: CONNECT_SHADER_DEV_FIELDS,

@@ -1,4 +1,4 @@
-# cloudflare-sun-shader
+# Cloudflare Shaders
 
 Standalone, fullscreen rendering of the custom Cloudflare "accent" sun shader — extracted from the [`feat/accent-shader`](https://github.com/cloudflare/cloudflare/tree/feat/accent-shader) branch of the main marketing site and packaged as a Cloudflare Workers site.
 

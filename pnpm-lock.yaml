@@ -51,8 +51,8 @@ importers:
         specifier: ^19.2.4
         version: 19.2.7(react@19.2.7)
       shader-panel:
-        specifier: link:/Users/ty/Workspace/shader-panel
-        version: link:../shader-panel
+        specifier: github:tjcages/shader-panel
+        version: https://codeload.github.com/tjcages/shader-panel/tar.gz/895220b95c0674c8f4afb156f76341939793904a(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       tailwindcss:
         specifier: ^4.1.18
         version: 4.3.0
@@ -2436,6 +2436,14 @@ packages:
   serialize-error@7.0.1:
     resolution: {integrity: sha512-8I8TjW5KMOKsZQTvoxjuSIa7foAwPWGOts+6o7sgjz41/qMD9VQHEDxi6PBvK2l0MXUmqZyNpUK+T2tQaaElvw==}
     engines: {node: '>=10'}
+
+  shader-panel@https://codeload.github.com/tjcages/shader-panel/tar.gz/895220b95c0674c8f4afb156f76341939793904a:
+    resolution: {tarball: https://codeload.github.com/tjcages/shader-panel/tar.gz/895220b95c0674c8f4afb156f76341939793904a}
+    version: 1.0.0
+    engines: {node: '>=18'}
+    peerDependencies:
+      react: '>=18'
+      react-dom: '>=18'
 
   sharp@0.34.5:
     resolution: {integrity: sha512-Ou9I5Ft9WNcCbXrU9cMgPBcCK8LiwLqcbywW3t4oDV37n1pzpuNLsYiAV8eODnjbtQlSDwZ2cUEeQz4E54Hltg==}
@@ -5338,6 +5346,11 @@ snapshots:
   serialize-error@7.0.1:
     dependencies:
       type-fest: 0.13.1
+
+  shader-panel@https://codeload.github.com/tjcages/shader-panel/tar.gz/895220b95c0674c8f4afb156f76341939793904a(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+    dependencies:
+      react: 19.2.7
+      react-dom: 19.2.7(react@19.2.7)
 
   sharp@0.34.5:
     dependencies:

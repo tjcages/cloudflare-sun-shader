@@ -18,7 +18,7 @@ export default defineConfig({
     },
     server: {
       fs: {
-        allow: ["..", "/Users/ty/Workspace/shader-panel"],
+        allow: [".."],
       },
       proxy: {
         "/api": {
